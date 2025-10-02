@@ -32,6 +32,12 @@ yarn install
 yarn start
 ```
 
+backend:
+```
+cd server
+python manage.py runserver
+```
+
 ### Installation
 
 [Installation link here]
