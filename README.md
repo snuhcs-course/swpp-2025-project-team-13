@@ -4,9 +4,9 @@ You can use the README file to showcase and promote your mobile app. The templat
 
 Please note that the README doesn't affect your grade and is not included in documentation(Wiki).
 
-# [Your Application Name]
+# Foodigram
 
-[Short application description here]
+Recommends foods
 
 ![Application Screenshot](path_to_screenshot.png)
 
@@ -22,6 +22,15 @@ Please note that the README doesn't affect your grade and is not included in doc
 
 - Android Studio [version, e.g., 4.2.1]
 - Minimum Android SDK Version [e.g., 21]
+
+### How to run
+
+frontend:
+```
+cd app
+yarn install
+yarn start
+```
 
 ### Installation
 
