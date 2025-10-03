@@ -86,3 +86,34 @@ web-build/
 !env.js
 
 /coverage
+
+# Additional entries for recent development
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Lock files (keep package-lock.json but ignore yarn.lock if using npm)
+yarn.lock
+
+# Temporary files
+*.tmp
+*.temp
+
+# React Native/Expo specific
+.expo-shared/
+
+# Design Demo dependencies (development only)
+Design_Demo/node_modules/
+Design_Demo/dist/
+Design_Demo/.vite/

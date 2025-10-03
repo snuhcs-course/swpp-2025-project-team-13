@@ -1,0 +1,131 @@
+import { FoodItem, Friend } from "../types/FoodTypes"
+
+export const foodItems: FoodItem[] = [
+  {
+    id: 1,
+    name: "Bibimbap Bowl",
+    distance: "0.5 km",
+    image: "https://images.unsplash.com/photo-1548592806-482f9b023d51?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxrb3JlYW4lMjBmb29kJTIwZGlzaHxlbnwxfHx8fDE3NTk0OTExMjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["spicy", "healthy", "rice"],
+    category: "korean",
+    allergens: ["eggs", "soy", "sesame"],
+  },
+  {
+    id: 2,
+    name: "Sushi Platter",
+    distance: "1.2 km",
+    image: "https://images.unsplash.com/photo-1717988732486-285ea23a6f88?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxqYXBhbmVzZSUyMHN1c2hpfGVufDF8fHx8MTc1OTQ5MTEyMXww&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["fresh", "seafood", "premium"],
+    category: "japanese",
+    allergens: ["fish", "soy", "shellfish"],
+  },
+  {
+    id: 3,
+    name: "Dan Dan Noodles",
+    distance: "0.8 km",
+    image: "https://images.unsplash.com/photo-1585032226651-759b368d7246?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaGluZXNlJTIwbm9vZGxlc3xlbnwxfHx8fDE3NTk0NDE5MDF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["spicy", "savory", "noodles"],
+    category: "chinese",
+    allergens: ["wheat", "soy", "peanuts", "sesame"],
+  },
+  {
+    id: 4,
+    name: "Classic Burger",
+    distance: "0.3 km",
+    image: "https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXJnZXIlMjBmcmllc3xlbnwxfHx8fDE3NTk0OTExMjJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["juicy", "cheesy", "comfort"],
+    category: "burger",
+    allergens: ["wheat", "milk", "eggs"],
+  },
+  {
+    id: 5,
+    name: "Margherita Pizza",
+    distance: "1.5 km",
+    image: "https://images.unsplash.com/photo-1544982503-9f984c14501a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHxwaXp6YSUyMHNsaWNlfGVufDF8fHx8MTc1OTQyMDExOXww&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["classic", "italian", "crispy"],
+    category: "pizza",
+    allergens: ["wheat", "milk"],
+  },
+  {
+    id: 6,
+    name: "Korean Fried Chicken",
+    distance: "0.7 km",
+    image: "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmcmllZCUyMGNoaWNrZW58ZW58MXx8fHwxNzU5NDU5Mjk2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["crispy", "sweet", "spicy"],
+    category: "chicken",
+    allergens: ["wheat", "soy"],
+  },
+  {
+    id: 7,
+    name: "Creamy Pasta",
+    distance: "0.9 km",
+    image: "https://images.unsplash.com/photo-1747852628136-e612ace24a23?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXN0YSUyMGl0YWxpYW58ZW58MXx8fHwxNzU5NDE4Njg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["creamy", "rich", "italian"],
+    category: "western",
+    allergens: ["wheat", "milk", "eggs"],
+  },
+  {
+    id: 8,
+    name: "Strawberry Cake",
+    distance: "1.1 km",
+    image: "https://images.unsplash.com/photo-1680090966824-eb9e8500bc2b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkZXNzZXJ0JTIwY2FrZXxlbnwxfHx8fDE3NTk0NDAwNDl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["sweet", "fresh", "dessert"],
+    category: "snack food",
+    allergens: ["wheat", "milk", "eggs"],
+  },
+]
+
+export const friends: Friend[] = [
+  {
+    id: 1,
+    name: "Sarah Kim",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
+    mutualLikes: [1, 2, 4],
+  },
+  {
+    id: 2,
+    name: "Mike Chen",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike",
+    mutualLikes: [2, 3, 5],
+  },
+  {
+    id: 3,
+    name: "Emma Lee",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Emma",
+    mutualLikes: [1, 4, 6, 8],
+  },
+  {
+    id: 4,
+    name: "John Park",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
+    mutualLikes: [3, 5, 7],
+  },
+  {
+    id: 5,
+    name: "Lisa Wong",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Lisa",
+    mutualLikes: [1, 3, 6],
+  },
+]
+
+export const allCategories = [
+  "korean",
+  "japanese",
+  "chinese",
+  "western",
+  "snack food",
+  "burger",
+  "pizza",
+  "chicken",
+]
+
+export const allAllergens = [
+  "eggs",
+  "soy", 
+  "sesame",
+  "fish",
+  "shellfish",
+  "wheat",
+  "milk",
+  "peanuts",
+]
