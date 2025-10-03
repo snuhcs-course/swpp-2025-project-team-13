@@ -28,8 +28,8 @@ Recommends foods
 frontend:
 ```
 cd app
-yarn install
-yarn start
+npm install
+npm start
 ```
 
 backend:
