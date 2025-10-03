@@ -73,6 +73,15 @@ export const foodItems: FoodItem[] = [
     category: "snack food",
     allergens: ["wheat", "milk", "eggs"],
   },
+  {
+    id: 9,
+    name: "Super Long Food Name That Tests Layout Breaking With Very Long Text",
+    distance: "2.3 km",
+    image: "https://images.unsplash.com/photo-1548592806-482f9b023d51?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxrb3JlYW4lMjBmb29kJTIwZGlzaHxlbnwxfHx8fDE3NTk0OTExMjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    keywords: ["test", "long", "layout"],
+    category: "korean",
+    allergens: ["eggs", "soy", "sesame", "fish", "shellfish", "wheat", "milk", "peanuts"],
+  },
 ]
 
 export const friends: Friend[] = [

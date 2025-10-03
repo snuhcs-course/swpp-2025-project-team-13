@@ -6,11 +6,11 @@ import {
   TextStyle,
   TouchableOpacity,
   ScrollView,
-  Modal,
   FlatList,
+  Dimensions,
 } from "react-native"
 import { Search, Filter, Heart, Users, Home, User, ChevronLeft, ChevronRight, X } from "lucide-react-native"
-import { Screen, Text, TextField } from "../components"
+import { Text, TextField } from "../components"
 import { FoodCard } from "../components/FoodCard"
 import { colors, spacing } from "../theme"
 import { foodItems, friends, allCategories, allAllergens } from "../data/mockData"
@@ -30,6 +30,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   const [selectedCategories, setSelectedCategories] = useState<string[]>(allCategories)
   const [selectedAllergens, setSelectedAllergens] = useState<string[]>([])
   const [currentTab, setCurrentTab] = useState<"recommendation" | "profile">("recommendation")
+  const [screenData, setScreenData] = useState(Dimensions.get('window'))
 
   // Filter foods based on search, filters, and liked view
   const getFilteredFoods = (): FoodItem[] => {
@@ -66,6 +67,15 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
   const filteredFoods = getFilteredFoods()
 
+  // Listen for screen dimension changes
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenData(window)
+    })
+    
+    return () => subscription?.remove()
+  }, [])
+
   // Reset index when filters change
   useEffect(() => {
     if (currentIndex >= filteredFoods.length && filteredFoods.length > 0) {
@@ -74,6 +84,52 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   }, [filteredFoods.length, currentIndex])
 
   const currentFood = filteredFoods[currentIndex]
+
+  // Calculate dynamic padding and food card sizing based on screen height
+  const getDynamicStyles = () => {
+    const { height, width } = screenData
+    
+    // Base measurements for fixed elements
+    const headerHeight = 120 // Approximate header height
+    const actionButtonsHeight = 80 // Approximate action buttons height with increased padding
+    const bottomTabsHeight = 55 // Approximate bottom tabs height
+    const navigationHeight = 50 // Navigation arrows height
+    const minPadding = spacing.sm * 2 // Minimum total padding needed
+    
+    // Calculate maximum available space for food card
+    const maxFoodCardHeight = height - headerHeight - actionButtonsHeight - bottomTabsHeight - navigationHeight - minPadding
+    const maxFoodCardWidth = width - (spacing.sm * 4) // Account for horizontal margins
+    
+    // Define ideal food card dimensions
+    const idealCardHeight = 520
+    const idealCardWidth = 380
+    
+    // Calculate scaling factor based on available space
+    const heightScale = Math.min(1, maxFoodCardHeight / idealCardHeight)
+    const widthScale = Math.min(1, maxFoodCardWidth / idealCardWidth)
+    const scale = Math.min(heightScale, widthScale, 1) // Don't scale up, only down
+    
+    // Calculate actual food card dimensions
+    const actualCardHeight = idealCardHeight * scale
+    const actualCardWidth = idealCardWidth * scale
+    
+    // Recalculate available space with actual card size
+    const availableHeight = height - headerHeight - actionButtonsHeight - bottomTabsHeight - actualCardHeight - navigationHeight
+    
+    // Split available space to center food card between search bar and action buttons
+    const headerToCardPadding = Math.max(spacing.sm, availableHeight / 2) // Between search bar and food card
+    const arrowsToActionPadding = Math.max(spacing.sm, availableHeight / 2) // Between arrows and action buttons
+    
+    return {
+      headerToCardPadding,
+      arrowsToActionPadding,
+      foodCardScale: scale,
+      foodCardHeight: actualCardHeight,
+      foodCardWidth: actualCardWidth,
+    }
+  }
+
+  const dynamicStyles = getDynamicStyles()
 
   const handleLike = () => {
     if (!currentFood) return
@@ -122,7 +178,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   }
 
   return (
-    <Screen style={$container} preset="fixed">
+    <View style={$container}>
       {/* Header */}
       <View style={$header}>
         <Text style={$headerTitle}>foodigram</Text>
@@ -143,8 +199,9 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         </View>
       </View>
 
-      {/* Main Content */}
+      {/* Main Content - Centered between header and action buttons */}
       <View style={$mainContent}>
+        <View style={{ flex: 1 }} />
         {filteredFoods.length === 0 ? (
           <View style={$emptyState}>
             <Text style={$emptyText}>No foods found</Text>
@@ -158,10 +215,13 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
               isScrapped={scrappedItems.includes(currentFood.id)}
               onLike={handleLike}
               onScrap={handleScrap}
+              scale={dynamicStyles.foodCardScale}
+              maxWidth={dynamicStyles.foodCardWidth}
+              maxHeight={dynamicStyles.foodCardHeight}
             />
 
             {/* Navigation */}
-            <View style={$navigation}>
+            <View style={[$navigation, { marginTop: spacing.lg }]}>
               <TouchableOpacity
                 onPress={handlePrev}
                 disabled={currentIndex === 0}
@@ -171,7 +231,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
                 ]}
               >
                 <ChevronLeft 
-                  size={24} 
+                  size={16} 
                   color={currentIndex === 0 ? colors.palette.neutral400 : colors.palette.neutral700}
                 />
               </TouchableOpacity>
@@ -189,19 +249,25 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
                 ]}
               >
                 <ChevronRight 
-                  size={24} 
+                  size={16} 
                   color={currentIndex === filteredFoods.length - 1 ? colors.palette.neutral400 : colors.palette.neutral700}
                 />
               </TouchableOpacity>
             </View>
           </>
         ) : null}
+        <View style={{ flex: 1 }} />
       </View>
 
       {/* Action Buttons */}
       <View style={$actionButtons}>
         <TouchableOpacity
-          style={[$actionButton, isFilterOpen && $actionButtonActive]}
+          style={[
+            $actionButton, 
+            showLikedOnly && $actionButtonActive,
+            isFilterOpen && $actionButtonHighlighted,
+            (isFilterOpen || isFriendsOpen) && !isFilterOpen && $actionButtonDimmed
+          ]}
           onPress={() => setIsFilterOpen(true)}
         >
           <Filter size={16} color={colors.palette.neutral700} />
@@ -209,7 +275,11 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[$actionButton, showLikedOnly && $actionButtonActive]}
+          style={[
+            $actionButton, 
+            showLikedOnly && $actionButtonActive,
+            (isFilterOpen || isFriendsOpen) && $actionButtonDimmed
+          ]}
           onPress={() => setShowLikedOnly(!showLikedOnly)}
         >
           <Heart 
@@ -221,7 +291,12 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[$actionButton, isFriendsOpen && $actionButtonActive]}
+          style={[
+            $actionButton, 
+            showLikedOnly && $actionButtonActive,
+            isFriendsOpen && $actionButtonHighlighted,
+            (isFilterOpen || isFriendsOpen) && !isFriendsOpen && $actionButtonDimmed
+          ]}
           onPress={() => setIsFriendsOpen(true)}
         >
           <Users size={16} color={colors.palette.neutral700} />
@@ -239,7 +314,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           onPress={() => setCurrentTab("recommendation")}
         >
           <Home 
-            size={20} 
+            size={28} 
             color={currentTab === "recommendation" ? colors.palette.primary500 : colors.palette.neutral500}
           />
           <Text 
@@ -260,7 +335,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           onPress={() => setCurrentTab("profile")}
         >
           <User 
-            size={20} 
+            size={28} 
             color={currentTab === "profile" ? colors.palette.primary500 : colors.palette.neutral500}
           />
           <Text 
@@ -274,96 +349,102 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         </TouchableOpacity>
       </View>
 
-      {/* Filter Modal */}
-      <Modal visible={isFilterOpen} animationType="slide" presentationStyle="pageSheet">
-        <View style={$modalContainer}>
-          <View style={$modalHeader}>
-            <Text style={$modalTitle}>Filters</Text>
-            <TouchableOpacity onPress={() => setIsFilterOpen(false)}>
-              <X size={24} color={colors.palette.neutral700} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={$modalContent}>
-            <Text style={$sectionTitle}>Categories</Text>
-            <View style={$filterGrid}>
-              {allCategories.map((category) => (
-                <TouchableOpacity
-                  key={category}
-                  style={[
-                    $filterChip,
-                    selectedCategories.includes(category) && $filterChipSelected
-                  ]}
-                  onPress={() => handleCategoryToggle(category)}
-                >
-                  <Text 
-                    style={[
-                      $filterChipText,
-                      selectedCategories.includes(category) && $filterChipTextSelected
-                    ]}
-                  >
-                    {category}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+      {/* Filter Speech Bubble */}
+      {isFilterOpen && (
+        <View style={$speechBubbleContainer}>
+          <View style={$speechBubble}>
+            <View style={$speechBubbleHeader}>
+              <Text style={$speechBubbleTitle}>Filters</Text>
+              <TouchableOpacity onPress={() => setIsFilterOpen(false)}>
+                <X size={20} color={colors.palette.neutral700} />
+              </TouchableOpacity>
             </View>
 
-            <Text style={$sectionTitle}>Exclude Allergens</Text>
-            <View style={$filterGrid}>
-              {allAllergens.map((allergen) => (
-                <TouchableOpacity
-                  key={allergen}
-                  style={[
-                    $filterChip,
-                    selectedAllergens.includes(allergen) && $filterChipSelected
-                  ]}
-                  onPress={() => handleAllergenToggle(allergen)}
-                >
-                  <Text 
+            <ScrollView style={$speechBubbleContent} showsVerticalScrollIndicator={false}>
+              <Text style={$sectionTitle}>Categories</Text>
+              <View style={$filterGrid}>
+                {allCategories.map((category) => (
+                  <TouchableOpacity
+                    key={category}
                     style={[
-                      $filterChipText,
-                      selectedAllergens.includes(allergen) && $filterChipTextSelected
+                      $filterChip,
+                      selectedCategories.includes(category) && $filterChipSelected
                     ]}
+                    onPress={() => handleCategoryToggle(category)}
                   >
-                    {allergen}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* Friends Modal */}
-      <Modal visible={isFriendsOpen} animationType="slide" presentationStyle="pageSheet">
-        <View style={$modalContainer}>
-          <View style={$modalHeader}>
-            <Text style={$modalTitle}>Friends</Text>
-            <TouchableOpacity onPress={() => setIsFriendsOpen(false)}>
-              <X size={24} color={colors.palette.neutral700} />
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={friends}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <View style={$friendItem}>
-                <Text style={$friendName}>{item.name}</Text>
-                <Text style={$friendLikes}>{item.mutualLikes.length} mutual likes</Text>
+                    <Text 
+                      style={[
+                        $filterChipText,
+                        selectedCategories.includes(category) && $filterChipTextSelected
+                      ]}
+                    >
+                      {category}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            )}
-            style={$modalContent}
-          />
+
+              <Text style={$sectionTitle}>Exclude Allergens</Text>
+              <View style={$filterGrid}>
+                {allAllergens.map((allergen) => (
+                  <TouchableOpacity
+                    key={allergen}
+                    style={[
+                      $filterChip,
+                      selectedAllergens.includes(allergen) && $filterChipSelected
+                    ]}
+                    onPress={() => handleAllergenToggle(allergen)}
+                  >
+                    <Text 
+                      style={[
+                        $filterChipText,
+                        selectedAllergens.includes(allergen) && $filterChipTextSelected
+                      ]}
+                    >
+                      {allergen}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
         </View>
-      </Modal>
-    </Screen>
+      )}
+
+      {/* Friends Speech Bubble */}
+      {isFriendsOpen && (
+        <View style={$speechBubbleContainer}>
+          <View style={$speechBubble}>
+            <View style={$speechBubbleHeader}>
+              <Text style={$speechBubbleTitle}>Friends</Text>
+              <TouchableOpacity onPress={() => setIsFriendsOpen(false)}>
+                <X size={20} color={colors.palette.neutral700} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={friends}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <View style={$friendItem}>
+                  <Text style={$friendName}>{item.name}</Text>
+                  <Text style={$friendLikes}>{item.mutualLikes.length} mutual likes</Text>
+                </View>
+              )}
+              style={$speechBubbleContent}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </View>
+      )}
+    </View>
   )
 })
 
 const $container: ViewStyle = {
   flex: 1,
   backgroundColor: colors.background,
+  paddingBottom: 65 + spacing.lg + 60, // Space for larger bottom tabs + increased action buttons margin + action buttons height
 }
 
 const $header: ViewStyle = {
@@ -408,7 +489,6 @@ const $mainContent: ViewStyle = {
   flex: 1,
   justifyContent: "center",
   alignItems: "center",
-  paddingVertical: spacing.md,
 }
 
 const $emptyState: ViewStyle = {
@@ -433,7 +513,6 @@ const $navigation: ViewStyle = {
   alignItems: "center",
   justifyContent: "center",
   gap: spacing.md,
-  marginTop: spacing.lg,
 }
 
 const $navButton: ViewStyle = {
@@ -452,12 +531,17 @@ const $navText: TextStyle = {
 }
 
 const $actionButtons: ViewStyle = {
+  position: "absolute",
+  bottom: 65 + spacing.lg, // Increased margin above larger bottom tabs
+  left: 0,
+  right: 0,
   flexDirection: "row",
   justifyContent: "space-around",
   paddingHorizontal: spacing.md,
   paddingVertical: spacing.md,
   borderTopWidth: 1,
   borderTopColor: colors.palette.neutral200,
+  backgroundColor: colors.background,
 }
 
 const $actionButton: ViewStyle = {
@@ -466,14 +550,11 @@ const $actionButton: ViewStyle = {
   paddingHorizontal: spacing.md,
   paddingVertical: spacing.sm,
   borderRadius: 20,
-  borderWidth: 1,
-  borderColor: colors.palette.neutral300,
   gap: spacing.xs,
 }
 
 const $actionButtonActive: ViewStyle = {
   backgroundColor: colors.palette.primary500,
-  borderColor: colors.palette.primary500,
 }
 
 const $actionButtonText: TextStyle = {
@@ -482,16 +563,25 @@ const $actionButtonText: TextStyle = {
 }
 
 const $bottomTabs: ViewStyle = {
+  position: "absolute",
+  bottom: 0,
+  left: 0,
+  right: 0,
+  height: 65, // Increased height to accommodate larger icons and text
   flexDirection: "row",
   borderTopWidth: 1,
   borderTopColor: colors.palette.neutral200,
+  backgroundColor: colors.background,
 }
 
 const $tabButton: ViewStyle = {
   flex: 1,
-  paddingVertical: spacing.md,
+  height: "100%", // Take full height of parent
   alignItems: "center",
-  gap: spacing.xs,
+  justifyContent: "space-evenly", // Distribute space evenly
+  flexDirection: "column", // Ensure vertical layout
+  paddingTop: spacing.sm, // Increased top margin for icon
+  paddingBottom: spacing.sm, // Equal bottom margin
 }
 
 const $tabButtonActive: ViewStyle = {
@@ -499,7 +589,7 @@ const $tabButtonActive: ViewStyle = {
 }
 
 const $tabText: TextStyle = {
-  fontSize: 12,
+  fontSize: 14,
   color: colors.palette.neutral500,
 }
 
@@ -507,28 +597,51 @@ const $tabTextActive: TextStyle = {
   color: colors.palette.primary500,
 }
 
-const $modalContainer: ViewStyle = {
-  flex: 1,
-  backgroundColor: colors.background,
+const $speechBubbleContainer: ViewStyle = {
+  position: "absolute",
+  top: 120, // Start from bottom of search bar
+  bottom: 65, // End at top of bottom tabs (fill completely)
+  left: 0,
+  right: 0,
+  backgroundColor: "rgba(0, 0, 0, 0.4)", // Semi-transparent overlay covering full area
+  justifyContent: "center",
+  alignItems: "center",
+  paddingHorizontal: spacing.md,
 }
 
-const $modalHeader: ViewStyle = {
+const $speechBubble: ViewStyle = {
+  backgroundColor: colors.background,
+  borderRadius: 16,
+  width: "85%", // Fixed width for consistent sizing
+  maxHeight: "90%",
+  minHeight: "60%",
+  shadowColor: "#000",
+  shadowOffset: {
+    width: 0,
+    height: 4,
+  },
+  shadowOpacity: 0.25,
+  shadowRadius: 8,
+  elevation: 8,
+}
+
+const $speechBubbleHeader: ViewStyle = {
   flexDirection: "row",
   justifyContent: "space-between",
   alignItems: "center",
   paddingHorizontal: spacing.md,
-  paddingVertical: spacing.md,
+  paddingVertical: spacing.sm,
   borderBottomWidth: 1,
   borderBottomColor: colors.palette.neutral200,
 }
 
-const $modalTitle: TextStyle = {
-  fontSize: 18,
+const $speechBubbleTitle: TextStyle = {
+  fontSize: 16,
   fontWeight: "bold",
   color: colors.text,
 }
 
-const $modalContent: ViewStyle = {
+const $speechBubbleContent: ViewStyle = {
   flex: 1,
   paddingHorizontal: spacing.md,
 }
@@ -588,4 +701,20 @@ const $friendName: TextStyle = {
 const $friendLikes: TextStyle = {
   fontSize: 14,
   color: colors.palette.neutral500,
+}
+
+const $actionButtonHighlighted: ViewStyle = {
+  backgroundColor: colors.background, // Keep clicked button bright and undarkened
+  shadowColor: "#000",
+  shadowOffset: {
+    width: 0,
+    height: 2,
+  },
+  shadowOpacity: 0.15,
+  shadowRadius: 4,
+  elevation: 4,
+}
+
+const $actionButtonDimmed: ViewStyle = {
+  backgroundColor: "rgba(0, 0, 0, 0.4)", // Apply same darkening as other components
 }
