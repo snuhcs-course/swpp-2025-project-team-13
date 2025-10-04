@@ -32,6 +32,7 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     'django.contrib.admin',
+    'corsheaders',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -125,6 +127,21 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
+
+# CORS - allow requests from the dev client (adjust origins as needed)
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+]
+
+# Allow cookies (session) to be sent across origins
+CORS_ALLOW_CREDENTIALS = True
+
+# If running with different hostnames/ports update this list
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+]
 
 # Django REST Framework
 REST_FRAMEWORK = {
