@@ -16,14 +16,15 @@ import { colors, spacing } from "../theme"
 import { foodItems, friends, allCategories, allAllergens } from "../data/mockData"
 import { FoodItem } from "../types/FoodTypes"
 import { AppStackScreenProps } from "../navigators"
+import { useStores } from "../models"
 
 interface FoodigramScreenProps extends AppStackScreenProps<"Foodigram"> {}
 
-export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function FoodigramScreen() {
+export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function FoodigramScreen({ navigation }) {
+  const { foodHistoryStore } = useStores()
   const [searchQuery, setSearchQuery] = useState("")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [likedItems, setLikedItems] = useState<number[]>([])
-  const [scrappedItems, setScrappedItems] = useState<number[]>([])
   const [showLikedOnly, setShowLikedOnly] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isFriendsOpen, setIsFriendsOpen] = useState(false)
@@ -142,11 +143,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
   const handleScrap = () => {
     if (!currentFood) return
-    setScrappedItems((prev) =>
-      prev.includes(currentFood.id)
-        ? prev.filter((id) => id !== currentFood.id)
-        : [...prev, currentFood.id]
-    )
+    foodHistoryStore.toggleScrappedItem(currentFood)
   }
 
   const handleNext = () => {
@@ -212,7 +209,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
             <FoodCard
               food={currentFood}
               isLiked={likedItems.includes(currentFood.id)}
-              isScrapped={scrappedItems.includes(currentFood.id)}
+              isScrapped={foodHistoryStore.isScrapped(currentFood.id)}
               onLike={handleLike}
               onScrap={handleScrap}
               scale={dynamicStyles.foodCardScale}
@@ -332,7 +329,10 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
             $tabButton,
             currentTab === "profile" && $tabButtonActive
           ]}
-          onPress={() => setCurrentTab("profile")}
+          onPress={() => {
+            setCurrentTab("profile")
+            navigation.navigate("Profile")
+          }}
         >
           <User 
             size={28} 

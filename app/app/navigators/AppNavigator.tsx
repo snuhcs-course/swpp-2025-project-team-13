@@ -34,6 +34,7 @@ import { colors } from "app/theme"
 export type AppStackParamList = {
   Welcome: undefined
   Foodigram: undefined
+  Profile: undefined
   // 🔥 Your screens go here
   // IGNITE_GENERATOR_ANCHOR_APP_STACK_PARAM_LIST
 }
@@ -60,6 +61,7 @@ const AppStack = observer(function AppStack() {
     >
           <Stack.Screen name="Welcome" component={Screens.WelcomeScreen} />
           <Stack.Screen name="Foodigram" component={Screens.FoodigramScreen} />
+          <Stack.Screen name="Profile" component={Screens.ProfileScreen} />
       {/** 🔥 Your screens go here */}
       {/* IGNITE_GENERATOR_ANCHOR_APP_STACK_SCREENS */}
     </Stack.Navigator>
