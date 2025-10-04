@@ -143,6 +143,18 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8081',
 ]
 
+# Allow cookies to be sent for cross-site requests (for dev). Requires Secure when SameSite=None.
+SESSION_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SAMESITE = 'None'
+# During local development we serve Django over plain HTTP (127.0.0.1 or LAN IP).
+# Android WebView (apps targeting >= R) rejects cookies that include the
+# 'Secure' directive when the URL scheme is http:// — that prevents the native
+# cookie store from accepting session cookies. For local dev, disable the
+# Secure flag so Set-Cookie will not include 'Secure'. Do NOT enable this in
+# production.
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = True
+
 # Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
