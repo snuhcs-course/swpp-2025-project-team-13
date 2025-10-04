@@ -28,6 +28,7 @@ export const LoginScreen = observer(function LoginScreen({ navigation }: LoginSc
       navigation.replace("Foodigram")
     } catch (e) {
       alert("Login error")
+      console.log(e)
     }
   }
 

@@ -76,6 +76,12 @@ export class Api {
   }
 
   async login(username: string, password: string) {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
     const res = await this.apisauce.post("/auth/login/", { username, password })
     try {
       const setCookie = (res as any).headers?.['set-cookie'] || (res as any).headers?.['Set-Cookie']

@@ -153,7 +153,7 @@ CSRF_COOKIE_SAMESITE = 'None'
 # Secure flag so Set-Cookie will not include 'Secure'. Do NOT enable this in
 # production.
 SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = False
 
 # Django REST Framework
 REST_FRAMEWORK = {

@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useEffect, useState } from "react"
 import { observer } from "mobx-react-lite"
 import {
   View,
@@ -15,6 +15,9 @@ import { Text } from "../components"
 import { colors, spacing } from "../theme"
 import { AppStackScreenProps } from "../navigators"
 import { useStores } from "../models"
+import { api } from "app/services/api"
+import * as storage from "app/utils/storage"
+
 
 interface ProfileScreenProps extends AppStackScreenProps<"Profile"> {}
 
@@ -22,10 +25,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   const { foodHistoryStore } = useStores()
   const screenWidth = Dimensions.get('window').width
   const imageSize = (screenWidth - spacing.md * 3 - 12) / 2 // 2 columns with padding
+  const [userName, setUserName] = useState("Sophia");
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await api.me()
+        const d: any = res.data
+        if (mounted && res.ok && d && d.username) setUserName(d.username)
+      } catch (e) {
+        // ignore
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   // Mock data for profile
   const user = {
-    name: "Sophia",
+    name: userName,
     role: "Foodie",
     tags: ["Italian", "Seafood", "Desserts"],
   }
@@ -67,6 +87,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
 
           {/* Foodie Label */}
           <Text style={$userRole}>{user.role}</Text>
+
+                  <TouchableOpacity
+          style={$logoutButton}
+          onPress={async () => {
+            try {
+              await api.logout()
+            } catch (e) {
+              // ignore network errors and continue logout locally
+            }
+            await storage.remove("IS_LOGGED_IN")
+            navigation.replace("Login")
+          }}
+        >
+          <Text style={$logoutText}>Log out</Text>
+        </TouchableOpacity>
         </View>
 
         {/* Food Tags */}
@@ -355,3 +390,15 @@ const $tabTextActive: TextStyle = {
   color: colors.palette.primary500,
 }
 "" 
+const $logoutButton: ViewStyle = {
+  marginTop: spacing.md,
+  backgroundColor: colors.palette.primary500,
+  paddingVertical: spacing.sm,
+  borderRadius: 12,
+  alignItems: "center",
+}
+
+const $logoutText: TextStyle = {
+  color: colors.palette.neutral100,
+  fontWeight: "600",
+}
