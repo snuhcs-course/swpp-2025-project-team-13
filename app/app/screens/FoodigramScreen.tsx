@@ -30,7 +30,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   const [isFriendsOpen, setIsFriendsOpen] = useState(false)
   const [selectedCategories, setSelectedCategories] = useState<string[]>(allCategories)
   const [selectedAllergens, setSelectedAllergens] = useState<string[]>([])
-  const [currentTab, setCurrentTab] = useState<"recommendation" | "profile">("recommendation")
   const [screenData, setScreenData] = useState(Dimensions.get('window'))
 
   // Filter foods based on search, filters, and liked view
@@ -304,45 +303,33 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
       {/* Bottom Tabs */}
       <View style={$bottomTabs}>
         <TouchableOpacity
-          style={[
-            $tabButton,
-            currentTab === "recommendation" && $tabButtonActive
-          ]}
-          onPress={() => setCurrentTab("recommendation")}
+          style={[$tabButton, $tabButtonActive]}
+          onPress={() => {
+            // already on Recommendation (Foodigram)
+            navigation.navigate("Foodigram")
+          }}
         >
           <Home 
             size={28} 
-            color={currentTab === "recommendation" ? colors.palette.primary500 : colors.palette.neutral500}
+            color={colors.palette.primary500}
           />
           <Text 
-            style={[
-              $tabText,
-              currentTab === "recommendation" && $tabTextActive
-            ]}
+            style={[$tabText, $tabTextActive]}
           >
             Recommendation
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            $tabButton,
-            currentTab === "profile" && $tabButtonActive
-          ]}
-          onPress={() => {
-            setCurrentTab("profile")
-            navigation.navigate("Profile")
-          }}
+          style={$tabButton}
+          onPress={() => navigation.navigate("Profile")}
         >
           <User 
             size={28} 
-            color={currentTab === "profile" ? colors.palette.primary500 : colors.palette.neutral500}
+            color={colors.palette.neutral500}
           />
           <Text 
-            style={[
-              $tabText,
-              currentTab === "profile" && $tabTextActive
-            ]}
+            style={$tabText}
           >
             Profile
           </Text>

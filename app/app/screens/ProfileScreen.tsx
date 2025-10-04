@@ -354,4 +354,4 @@ const $tabText: TextStyle = {
 const $tabTextActive: TextStyle = {
   color: colors.palette.primary500,
 }
-
+"" 

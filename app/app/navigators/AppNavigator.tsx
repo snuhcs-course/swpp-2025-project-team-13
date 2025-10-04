@@ -33,6 +33,7 @@ import { colors } from "app/theme"
  */
 export type AppStackParamList = {
   Welcome: undefined
+  Login: undefined
   Foodigram: undefined
   Profile: undefined
   // 🔥 Your screens go here
@@ -57,9 +58,10 @@ const AppStack = observer(function AppStack() {
   return (
     <Stack.Navigator
       screenOptions={{ headerShown: false, navigationBarColor: colors.background }}
-      initialRouteName="Foodigram"
+      initialRouteName="Login"
     >
           <Stack.Screen name="Welcome" component={Screens.WelcomeScreen} />
+          <Stack.Screen name="Login" component={Screens.LoginScreen} />
           <Stack.Screen name="Foodigram" component={Screens.FoodigramScreen} />
           <Stack.Screen name="Profile" component={Screens.ProfileScreen} />
       {/** 🔥 Your screens go here */}
