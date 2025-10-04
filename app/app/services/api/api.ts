@@ -41,7 +41,39 @@ export class Api {
       headers: {
         Accept: "application/json",
       },
+      // allow cookies to be sent/received for session auth
+      withCredentials: true,
     })
+  }
+
+  async getCsrf() {
+    const res = await this.apisauce.get("/auth/csrf/")
+    try {
+      const d: any = res.data
+      const token: string | undefined = d?.csrfToken
+      if (token) this.apisauce.setHeader("X-CSRFToken", token)
+    } catch (e) {
+      // ignore
+    }
+    return res
+  }
+
+  async login(username: string, password: string) {
+    return this.apisauce.post("/auth/login/", { username, password })
+  }
+
+  async logout() {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    return this.apisauce.post("/auth/logout/")
+  }
+
+  async me() {
+    return this.apisauce.get("/me/")
   }
 
 }
