@@ -1,79 +1,150 @@
-import React, { useEffect, useState } from "react"
+import React from "react"
 import { observer } from "mobx-react-lite"
-import { View, ViewStyle, TextStyle, Image, ImageStyle, TouchableOpacity } from "react-native"
-import { Home, User } from "lucide-react-native"
-import { Text } from "app/components"
-import * as storage from "app/utils/storage"
-import { api } from "app/services/api"
-import { AppStackScreenProps } from "app/navigators"
-import { colors, spacing } from "app/theme"
-import { useSafeAreaInsetsStyle } from "app/utils/useSafeAreaInsetsStyle"
-
-const avatar = require("../../assets/images/welcome-face.png")
+import {
+  View,
+  ViewStyle,
+  TextStyle,
+  ScrollView,
+  Image,
+  ImageStyle,
+  TouchableOpacity,
+  Dimensions,
+} from "react-native"
+import { ChevronLeft, Home, User } from "lucide-react-native"
+import { Text } from "../components"
+import { colors, spacing } from "../theme"
+import { AppStackScreenProps } from "../navigators"
+import { useStores } from "../models"
 
 interface ProfileScreenProps extends AppStackScreenProps<"Profile"> {}
 
-export const ProfileScreen = observer(function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const $bottomContainerInsets = useSafeAreaInsetsStyle(["bottom"])
-  const [username, setUsername] = useState<string | null>(null)
+export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function ProfileScreen({ navigation }) {
+  const { foodHistoryStore } = useStores()
+  const screenWidth = Dimensions.get('window').width
+  const imageSize = (screenWidth - spacing.md * 3 - 12) / 2 // 2 columns with padding
 
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const res = await api.me()
-        const d: any = res.data
-        if (mounted && res.ok && d && d.username) setUsername(d.username)
-      } catch (e) {
-        // ignore
-      }
-    })()
-    return () => {
-      mounted = false
-    }
-  }, [])
+  // Mock data for profile
+  const user = {
+    name: "Sophia",
+    role: "Foodie",
+    tags: ["Italian", "Seafood", "Desserts"],
+  }
+
+  const likedRestaurants = [
+    { id: 1, name: "The Pasta Place", image: require("../../assets/images/restaurant1.jpg") },
+    { id: 2, name: "Ocean's Catch", image: require("../../assets/images/restaurant2.jpg") },
+    { id: 3, name: "Sweet Garden", image: require("../../assets/images/restaurant3.jpg") },
+  ]
+
+  // Get scrapped items from store
+  const scrappedFoods = foodHistoryStore.scrappedItemsList
 
   return (
     <View style={$container}>
-      <View style={$topContainer}>
-        <Image source={avatar} style={$avatar} resizeMode="cover" />
-  <Text preset="heading" style={$name}>{username ?? "Jane Doe"}</Text>
-  <Text size="md">Food lover · Seoul</Text>
-      </View>
-
-      <View style={[$bottomContainer, $bottomContainerInsets, { paddingBottom: 90 }]}>
-        <Text>Welcome to your profile. Edit your details and preferences here.</Text>
-        <TouchableOpacity
-          style={$logoutButton}
-          onPress={async () => {
-            try {
-              await api.logout()
-            } catch (e) {
-              // ignore network errors and continue logout locally
-            }
-            await storage.remove("IS_LOGGED_IN")
-            navigation.replace("Login")
-          }}
+      {/* Header */}
+      <View style={$header}>
+        <TouchableOpacity 
+          style={$backButton}
+          onPress={() => navigation.goBack()}
         >
-          <Text style={$logoutText}>Log out</Text>
+          <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
+        <Text style={$headerTitle}>History</Text>
+        <View style={$backButton} />
       </View>
 
-      {/* Bottom Tabs (same layout as Foodigram) */}
-  <View style={$bottomTabs}>
+      {/* Scrollable Content */}
+      <ScrollView style={$scrollView} showsVerticalScrollIndicator={false}>
+        {/* Profile Section */}
+        <View style={$profileSection}>
+          {/* Profile Image */}
+          <View style={$profileImageContainer}>
+            <View style={$profileImage} />
+          </View>
+
+          {/* User Name */}
+          <Text style={$userName}>{user.name}</Text>
+
+          {/* Foodie Label */}
+          <Text style={$userRole}>{user.role}</Text>
+        </View>
+
+        {/* Food Tags */}
+        <View style={$tagsContainer}>
+          {user.tags.map((tag, index) => (
+            <View key={index} style={$tag}>
+              <Text style={$tagText}>{tag}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Liked Restaurants Section */}
+        <Text style={$sectionTitle}>Liked Restaurants</Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={$restaurantsScroll}
+          style={$restaurantsScrollView}
+        >
+          {likedRestaurants.map((restaurant) => (
+            <TouchableOpacity key={restaurant.id} style={$restaurantCard}>
+              <View style={$restaurantImageContainer}>
+                <Image 
+                  source={restaurant.image} 
+                  style={$restaurantImage}
+                  resizeMode="cover"
+                />
+              </View>
+              <Text style={$restaurantName}>{restaurant.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Food History Section */}
+        <Text style={$sectionTitle}>Food History</Text>
+        {scrappedFoods.length === 0 ? (
+          <View style={$emptyState}>
+            <Text style={$emptyText}>No scrapped foods yet</Text>
+            <Text style={$emptySubtext}>Scrap foods from the Recommendation tab to see them here!</Text>
+          </View>
+        ) : (
+          <View style={$foodGrid}>
+            {scrappedFoods.map((food) => (
+              <TouchableOpacity 
+                key={food.id} 
+                style={[$foodCard, { width: imageSize }]}
+              >
+                <Image 
+                  source={{ uri: food.image }} 
+                  style={[$foodImage, { width: imageSize, height: 160 }]}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Bottom Tabs */}
+      <View style={$bottomTabs}>
         <TouchableOpacity
           style={$tabButton}
           onPress={() => navigation.navigate("Foodigram")}
         >
-          <Home size={28} color={colors.palette.neutral500} />
+          <Home 
+            size={28} 
+            color={colors.palette.neutral500}
+          />
           <Text style={$tabText}>Recommendation</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[$tabButton, $tabButtonActive]}
-          onPress={() => navigation.navigate("Profile")}
         >
-          <User size={28} color={colors.palette.primary500} />
+          <User 
+            size={28} 
+            color={colors.palette.primary500}
+          />
           <Text style={[$tabText, $tabTextActive]}>Profile</Text>
         </TouchableOpacity>
       </View>
@@ -84,6 +155,169 @@ export const ProfileScreen = observer(function ProfileScreen({ navigation }: Pro
 const $container: ViewStyle = {
   flex: 1,
   backgroundColor: colors.background,
+  paddingBottom: 65, // Space for bottom tabs
+}
+
+const $header: ViewStyle = {
+  height: 56,
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  backgroundColor: colors.background,
+  paddingHorizontal: spacing.md,
+  borderBottomWidth: 1,
+  borderBottomColor: colors.palette.neutral200,
+}
+
+const $backButton: ViewStyle = {
+  width: 40,
+  height: 40,
+  justifyContent: "center",
+  alignItems: "center",
+}
+
+const $headerTitle: TextStyle = {
+  fontSize: 18,
+  fontWeight: "bold",
+  color: colors.text,
+}
+
+const $scrollView: ViewStyle = {
+  flex: 1,
+  backgroundColor: colors.background,
+}
+
+const $profileSection: ViewStyle = {
+  alignItems: "center",
+  paddingTop: spacing.lg,
+  paddingBottom: spacing.md,
+}
+
+const $profileImageContainer: ViewStyle = {
+  width: 100,
+  height: 100,
+  borderRadius: 50,
+  overflow: "hidden",
+  marginBottom: spacing.sm,
+}
+
+const $profileImage: ViewStyle = {
+  width: "100%",
+  height: "100%",
+  backgroundColor: "#E8C4A8",
+}
+
+const $userName: TextStyle = {
+  fontSize: 22,
+  fontWeight: "bold",
+  color: colors.text,
+  marginTop: spacing.sm,
+}
+
+const $userRole: TextStyle = {
+  fontSize: 14,
+  color: "#FF6B9D",
+  marginTop: spacing.xs,
+}
+
+const $tagsContainer: ViewStyle = {
+  flexDirection: "row",
+  justifyContent: "center",
+  gap: spacing.sm,
+  paddingHorizontal: spacing.lg,
+  marginBottom: spacing.lg,
+  flexWrap: "wrap",
+}
+
+const $tag: ViewStyle = {
+  paddingHorizontal: spacing.md,
+  paddingVertical: spacing.xs,
+  backgroundColor: "#F0F0F0",
+  borderRadius: 16,
+}
+
+const $tagText: TextStyle = {
+  fontSize: 14,
+  color: colors.text,
+}
+
+const $sectionTitle: TextStyle = {
+  fontSize: 18,
+  fontWeight: "bold",
+  color: colors.text,
+  marginLeft: spacing.lg,
+  marginBottom: spacing.md,
+  marginTop: spacing.xs,
+}
+
+const $restaurantsScrollView: ViewStyle = {
+  marginBottom: spacing.lg,
+}
+
+const $restaurantsScroll: ViewStyle = {
+  paddingHorizontal: spacing.lg,
+  gap: spacing.md,
+}
+
+const $restaurantCard: ViewStyle = {
+  width: 140,
+  marginRight: spacing.md,
+}
+
+const $restaurantImageContainer: ViewStyle = {
+  width: 140,
+  height: 140,
+  borderRadius: 12,
+  overflow: "hidden",
+  backgroundColor: "#FFD4C4",
+  marginBottom: spacing.sm,
+}
+
+const $restaurantImage: ImageStyle = {
+  width: "100%",
+  height: "100%",
+}
+
+const $restaurantName: TextStyle = {
+  fontSize: 14,
+  fontWeight: "bold",
+  color: colors.text,
+}
+
+const $foodGrid: ViewStyle = {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  paddingHorizontal: spacing.lg,
+  gap: 12,
+  paddingBottom: spacing.xl,
+}
+
+const $foodCard: ViewStyle = {
+  marginBottom: spacing.sm,
+}
+
+const $foodImage: ImageStyle = {
+  borderRadius: 12,
+  backgroundColor: "#D5D5D5",
+}
+
+const $emptyState: ViewStyle = {
+  alignItems: "center",
+  paddingHorizontal: spacing.lg,
+  paddingVertical: spacing.xl,
+}
+
+const $emptyText: TextStyle = {
+  fontSize: 16,
+  color: colors.palette.neutral400,
+  marginBottom: spacing.xs,
+  fontWeight: "bold",
+}
+
+const $emptySubtext: TextStyle = {
+  fontSize: 14,
+  color: colors.palette.neutral400,
+  textAlign: "center",
 }
 
 const $bottomTabs: ViewStyle = {
@@ -119,40 +353,4 @@ const $tabText: TextStyle = {
 
 const $tabTextActive: TextStyle = {
   color: colors.palette.primary500,
-}
-
-const $topContainer: ViewStyle = {
-  flex: 1,
-  justifyContent: "center",
-  alignItems: "center",
-  paddingHorizontal: spacing.lg,
-}
-
-const $avatar: ImageStyle = {
-  width: 120,
-  height: 120,
-  borderRadius: 60,
-  marginBottom: spacing.md,
-}
-
-const $name: TextStyle = {
-  marginBottom: spacing.xs,
-}
-
-const $bottomContainer: ViewStyle = {
-  padding: spacing.lg,
-  backgroundColor: colors.palette.neutral100,
-}
-
-const $logoutButton: ViewStyle = {
-  marginTop: spacing.md,
-  backgroundColor: colors.palette.primary500,
-  paddingVertical: spacing.sm,
-  borderRadius: 12,
-  alignItems: "center",
-}
-
-const $logoutText: TextStyle = {
-  color: colors.palette.neutral100,
-  fontWeight: "600",
 }
