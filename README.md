@@ -1,66 +1,55 @@
-# SNU-SWPP-Template
+# 📱 Demo App (Prototype)
 
-You can use the README file to showcase and promote your mobile app. The template provided below is just a starting point. Feel free to craft your README as you see fit. 
+A prototype **mobile app** showcasing basic navigation and layout using mock data.  
+The app features the following main sections:
 
-Please note that the README doesn't affect your grade and is not included in documentation(Wiki).
+---
 
-# Foodigram
+## 🔐 Login
 
-Recommends foods
+- Opens with a **Login screen** featuring a “Sign in with Apple” button.  
+- This screen is **UI-only for demo purposes** — authentication logic is not yet implemented.  
+- Tapping the button transitions directly to the **Home screen**.
 
-![Application Screenshot](path_to_screenshot.png)
+---
 
-## Features
+## 🏠 Home (Recommendations)
 
-- Feature 1: Brief description
-- Feature 2: Brief description
-- ...
+- Displays a **scrollable list of recommendation cards** after login.  
+- Each card shows a mock recommendation with:
+  - 🖼 Image  
+  - 📝 Title  
+  - 💬 Description  
+- A **bottom navigation bar** allows switching between Home and Profile.
 
-## Getting Started
+---
 
-### Prerequisites
+## 🙍 Profile
 
-- Minimum Android SDK Version [23]
-- JDK 17 (for Gradle)
-- Node.js (20+ recommended) and npm
-- uv
-- adb (comes with platform-tools) and a USB-connected Android device or emulator
+- Accessible via the **bottom tab bar**.  
+- Shows:
+  - 👤 User avatar  
+  - 🏷 Nickname  
+  - ⚙️ Action buttons like “Edit Profile” and “Logout”  
+- All contents are **placeholders for now**.
 
-### How to run
+---
 
-#### frontend:
-```bash
-cd app
-npm install
-npm run android
-```
+## 📹 Demo Video
 
-#### backend:
+**File:** `Simulator Screen Recording - iPhone 15 Pro (17.2) - 2025-10-05 at 23.49.37.mp4`  
+**Duration:** 33 seconds  
+**Resolution:** 1178×2556  
 
-First, set up the django environment.
-```bash
-cd server
-uv run python manage.py migrate
-uv run python manage.py createsuperuser # this is necessary because register function is not implemented yet.
-```
+The video demonstrates **smooth transitions** between Login, Home, and Profile screens using mocked UI components.
 
-Then, run the app:
-```bash
-uv run python manage.py runserver
-```
+---
 
-#### notes:
-When running the mobile app on a physical device or emulator you must ensure the frontend can reach the backend. For example:
+## 🚧 Future Improvements
 
-- adb reverse (for a device connected via USB):
+- ✅ Real social login integration (Apple, Google, Kakao)  
+- ✅ Backend connection for personalized recommendations  
+- ✅ Profile editing functionality and data persistence  
+- ✅ State management and error handling  
 
-```bash
-# forwards device port 8000 to your machine's 8000
-adb reverse tcp:8000 tcp:8000
-```
-
-- other options: use your host machine's LAN IP in the app config, or use a tunneling service.
-
-### Installation
-
-[Installation link here]
+---
