@@ -1,5 +1,9 @@
 # 📱 Demo App (Prototype)
 
+
+https://github.com/user-attachments/assets/41dee7f6-34cc-4076-a824-746e7942ff2d
+
+
 A prototype **mobile app** showcasing basic navigation and layout using mock data.  
 The app features the following main sections:
 
