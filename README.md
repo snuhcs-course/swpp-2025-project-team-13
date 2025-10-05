@@ -52,10 +52,6 @@ adb reverse tcp:8000 tcp:8000
 
 - other options: use your host machine's LAN IP in the app config, or use a tunneling service.
 
-### Installation
-
-[Installation link here]
-
 ---
 
 ## 🔐 Login
@@ -85,16 +81,6 @@ adb reverse tcp:8000 tcp:8000
   - 🏷 Nickname  
   - ⚙️ Action buttons like “Edit Profile” and “Logout”  
 - All contents are **placeholders for now**.
-
----
-
-## 📹 Demo Video
-
-**File:** `Simulator Screen Recording - iPhone 15 Pro (17.2) - 2025-10-05 at 23.49.37.mp4`  
-**Duration:** 33 seconds  
-**Resolution:** 1178×2556  
-
-The video demonstrates **smooth transitions** between Login, Home, and Profile screens using mocked UI components.
 
 ---
 
