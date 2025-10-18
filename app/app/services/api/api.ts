@@ -103,6 +103,34 @@ export class Api {
     return res
   }
 
+  async register(username: string, email: string, password: string) {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    const res = await this.apisauce.post("/auth/register/", { username, email, password })
+    try {
+      const setCookie = (res as any).headers?.['set-cookie'] || (res as any).headers?.['Set-Cookie']
+      if (setCookie) {
+        try {
+          const setter: any = (Cookies as any).setFromResponse || (Cookies as any).default?.setFromResponse || Cookies.setFromResponse
+          if (setter) {
+            await setter.call(Cookies, this.config.url, Array.isArray(setCookie) ? setCookie.join('\n') : String(setCookie))
+            // ensure apisauce has a Cookie header from native store for immediate subsequent requests
+            await this.attachCookiesHeader()
+          }
+        } catch (e) {
+          // ignore cookie persistence errors
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return res
+  }
+
   async logout() {
     // ensure csrf header is present; get it if missing
     // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
@@ -135,6 +163,64 @@ export class Api {
     }
     await this.attachCookiesHeader()
     return this.apisauce.post("/photos/", { photo_url })
+  }
+
+  async getRestaurantDetail(restaurantId: number) {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.get(`/restaurants/${restaurantId}/`)
+  }
+
+  async getPreferences() {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.get("/onboarding/")
+  }
+
+  async savePreferences(preferences: {
+    spicy_level?: number
+    sweet_level?: number
+    salty_level?: number
+    allergies?: string[]
+    disliked_ingredients?: string[]
+    favorite_cuisines?: string[]
+  }) {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.post("/onboarding/", preferences)
+  }
+
+  async updatePreferences(preferences: {
+    spicy_level?: number
+    sweet_level?: number
+    salty_level?: number
+    allergies?: string[]
+    disliked_ingredients?: string[]
+    favorite_cuisines?: string[]
+  }) {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.patch("/onboarding/update/", preferences)
   }
 
   private async attachCookiesHeader() {
