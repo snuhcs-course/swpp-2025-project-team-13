@@ -34,7 +34,6 @@ import { colors } from "app/theme"
 export type AppStackParamList = {
   Welcome: undefined
   Login: undefined
-  Onboarding: undefined
   Foodigram: undefined
   Profile: undefined
   // 🔥 Your screens go here
@@ -63,7 +62,6 @@ const AppStack = observer(function AppStack() {
     >
           <Stack.Screen name="Welcome" component={Screens.WelcomeScreen} />
           <Stack.Screen name="Login" component={Screens.LoginScreen} />
-          <Stack.Screen name="Onboarding" component={Screens.OnboardingScreen} />
           <Stack.Screen name="Foodigram" component={Screens.FoodigramScreen} />
           <Stack.Screen name="Profile" component={Screens.ProfileScreen} />
       {/** 🔥 Your screens go here */}

@@ -71,6 +71,3 @@ class UserScrap(models.Model):
         indexes = [
             models.Index(fields=["user", "restaurant"]),
         ]
-    
-    def __str__(self):
-        return f"{self.user.username} → {self.restaurant.name}"
