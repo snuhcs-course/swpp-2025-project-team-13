@@ -19,6 +19,7 @@ import { foodItems, friends, allCategories, allAllergens } from "../data/mockDat
 import { FoodItem } from "../types/FoodTypes"
 import { AppStackScreenProps } from "../navigators"
 import { useStores } from "../models"
+import { api } from "../services/api"
 
 interface FoodigramScreenProps extends AppStackScreenProps<"Foodigram"> {}
 
@@ -93,6 +94,53 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     return () => subscription?.remove()
   }, [])
 
+  // Load scraps from server on mount
+  useEffect(() => {
+    const loadScrapsFromServer = async () => {
+      try {
+        const response = await api.getScraps()
+        
+        if (response.ok && response.data) {
+          const serverScraps = response.data as any[]
+          
+          // 서버에서 가져온 스크랩된 restaurant ID 목록
+          const scrapedRestaurantIds = serverScraps.map((scrap: any) => scrap.restaurant?.id).filter(Boolean)
+          
+          // 로컬 store 초기화: 현재 로컬에 있는 것 중 서버에 없는 것은 제거
+          const currentLocalScraps = foodHistoryStore.scrappedItems.map(item => item.id)
+          
+          // 서버에는 있는데 로컬에는 없는 것 추가
+          scrapedRestaurantIds.forEach((restaurantId: number) => {
+            const foodItem = foodItems.find(f => f.id === restaurantId)
+            if (foodItem && !currentLocalScraps.includes(restaurantId)) {
+              foodHistoryStore.toggleScrappedItem(foodItem)
+            }
+          })
+          
+          // 로컬에는 있는데 서버에는 없는 것 제거
+          currentLocalScraps.forEach((localId: number) => {
+            if (!scrapedRestaurantIds.includes(localId)) {
+              const foodItem = foodItems.find(f => f.id === localId)
+              if (foodItem) {
+                foodHistoryStore.toggleScrappedItem(foodItem)
+              }
+            }
+          })
+          
+          if (__DEV__) {
+            console.log(`Home: Synced scraps from server. Total: ${scrapedRestaurantIds.length}`)
+          }
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.error('Home: Failed to load scraps from server:', error)
+        }
+      }
+    }
+    
+    loadScrapsFromServer()
+  }, [])
+
   
   // Reset index when filters change
   useEffect(() => {
@@ -153,16 +201,43 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     )
   }
 
-  const handleScrap = () => {
+  const handleScrap = async () => {
     if (!currentFood) return
-    const isCurrentlyScrapped = foodHistoryStore.isScrapped(currentFood.id)
-    const action = isCurrentlyScrapped ? "unscrapped" : "scrapped"
     
-    if (__DEV__) {
-      console.log(`Home: ${action} food "${currentFood.name}" (ID: ${currentFood.id})`)
+    try {
+      // 서버 API 호출
+      const response = await api.toggleScrap(currentFood.id)
+      
+      if (response.ok && response.data) {
+        // 서버 응답에서 실제 스크랩 상태를 가져옴
+        const serverScrapped = (response.data as any).scrapped
+        const localScrapped = foodHistoryStore.isScrapped(currentFood.id)
+        
+        // 서버 상태와 로컬 상태가 다르면 로컬을 서버에 맞춤
+        if (serverScrapped !== localScrapped) {
+          foodHistoryStore.toggleScrappedItem(currentFood)
+        }
+        
+        const action = serverScrapped ? "scrapped" : "unscrapped"
+        
+        if (__DEV__) {
+          console.log(`Home: ${action} food "${currentFood.name}" (ID: ${currentFood.id})`)
+          console.log(`Server response:`, response.data)
+        }
+      } else {
+        // 서버 에러 처리
+        if (__DEV__) {
+          console.error(`Home: Failed to scrap food:`, response.problem)
+        }
+        alert(`Failed to update scrap. Please try again.`)
+      }
+    } catch (error) {
+      // 네트워크 에러 등
+      if (__DEV__) {
+        console.error(`Home: Error scrapping food:`, error)
+      }
+      alert(`Error: Unable to update scrap. Check your connection.`)
     }
-    
-    foodHistoryStore.toggleScrappedItem(currentFood)
   }
 
   // Navigation functions are now handled directly in gesture callbacks

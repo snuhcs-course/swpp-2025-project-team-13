@@ -10,8 +10,8 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native"
-import { Home, User, Filter, RefreshCw, X } from "lucide-react-native"
-import { Text } from "../components"
+import { Home, User, Filter, RefreshCw, X, Settings } from "lucide-react-native"
+import { Text, RestaurantDetailModal, PreferencesModal } from "../components"
 import { colors, spacing } from "../theme"
 import { AppStackScreenProps } from "../navigators"
 import { useStores } from "../models"
@@ -35,6 +35,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   const [hideScrappedImages, setHideScrappedImages] = useState(false)
   const [excludedCategories, setExcludedCategories] = useState<string[]>([])
   const [excludedAllergens, setExcludedAllergens] = useState<string[]>([])
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState<number | null>(null)
+  const [isModalVisible, setIsModalVisible] = useState(false)
+  const [isPreferencesModalVisible, setIsPreferencesModalVisible] = useState(false)
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
 
   const [userImages, setUserImages] = useState<Array<{id: string, type: string, image: any, name: string}>>([
@@ -171,6 +174,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
               <Text style={$tagText}>{tag}</Text>
             </View>
           ))}
+          <TouchableOpacity 
+            style={$settingsButton}
+            onPress={() => setIsPreferencesModalVisible(true)}
+          >
+            <Settings size={16} color={colors.palette.neutral600} />
+          </TouchableOpacity>
         </View>
 
         {/* Liked Restaurants Section */}
@@ -237,6 +246,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
                 return (              <TouchableOpacity 
                 key={item.id} 
                 style={[$foodCard, { width: imageSize }]}
+                onPress={() => {
+                  if (item.type === 'scrapped') {
+                    // 스크랩된 음식점 클릭 시 모달 열기
+                    setSelectedRestaurantId(parseInt(item.id))
+                    setIsModalVisible(true)
+                    if (__DEV__) {
+                      console.log(`Profile: Opened restaurant detail modal for ID ${item.id}`)
+                    }
+                  }
+                }}
               >
                 <Image 
                   source={item.image} 
@@ -430,6 +449,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
           </View>
         </View>
       )}
+
+      {/* Restaurant Detail Modal */}
+      <RestaurantDetailModal
+        restaurantId={selectedRestaurantId}
+        visible={isModalVisible}
+        onClose={() => {
+          setIsModalVisible(false)
+          setSelectedRestaurantId(null)
+        }}
+      />
+
+      {/* Preferences Modal */}
+      <PreferencesModal
+        visible={isPreferencesModalVisible}
+        onClose={() => setIsPreferencesModalVisible(false)}
+      />
     </View>
   )
 })
@@ -780,4 +815,15 @@ const $imageBadgeText: TextStyle = {
   fontSize: 10,
   fontWeight: "bold",
   color: colors.palette.neutral100,
+}
+
+const $settingsButton: ViewStyle = {
+  marginLeft: spacing.sm,
+  padding: spacing.sm,
+  borderRadius: 20,
+  backgroundColor: colors.palette.neutral100,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  alignItems: "center",
+  justifyContent: "center",
 }

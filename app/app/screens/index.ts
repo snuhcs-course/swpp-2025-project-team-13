@@ -4,4 +4,5 @@ export * from "./ProfileScreen"
 export * from "./ErrorScreen/ErrorBoundary"
 export * from "./ProfileScreen"
 export * from "./LoginScreen"
+export * from "./OnboardingScreen"
 // export other screens here

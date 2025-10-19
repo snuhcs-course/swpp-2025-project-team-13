@@ -17,7 +17,7 @@ class MenuCandidate(models.Model):
     restaurant = models.ForeignKey("restaurant.Restaurant", on_delete=models.CASCADE, related_name="menu_candidates")
     name = models.CharField(max_length=200)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    image_url = models.URLField(blank=True)
+    image_url = models.URLField(null=True, blank=True)
     embedding = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
