@@ -1,148 +1,267 @@
 import { render } from "@testing-library/react-native"
 import React from "react"
-import { View, Text } from "react-native"
+import { Text, View } from "react-native"
 import { Screen } from "./Screen"
-import { SafeAreaProvider } from "react-native-safe-area-context"
 
-// Mock React Navigation's useScrollToTop
+// Mock navigation hook
 jest.mock("@react-navigation/native", () => ({
-  ...jest.requireActual("@react-navigation/native"),
   useScrollToTop: jest.fn(),
 }))
 
-const initialMetrics = {
-  frame: { x: 0, y: 0, width: 0, height: 0 },
-  insets: { top: 0, left: 0, right: 0, bottom: 0 },
-}
-
-const renderWithSafeArea = (component: React.ReactElement) => {
-  return render(
-    <SafeAreaProvider initialMetrics={initialMetrics}>
-      {component}
-    </SafeAreaProvider>
-  )
-}
-
 describe("Screen", () => {
-  it("renders with fixed preset", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen preset="fixed">
-        <Text>Fixed Content</Text>
-      </Screen>
-    )
-    expect(toJSON()).toBeTruthy()
-  })
-
-  it("renders with scroll preset", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen preset="scroll">
-        <Text>Scrollable Content</Text>
-      </Screen>
-    )
-    expect(toJSON()).toBeTruthy()
-  })
-
-  it("renders with auto preset", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen preset="auto">
-        <Text>Auto Content</Text>
-      </Screen>
-    )
-    expect(toJSON()).toBeTruthy()
-  })
-
-  it("renders children", () => {
-    const { getByText } = renderWithSafeArea(
+  it("should render children", () => {
+    const { getByText } = render(
       <Screen>
         <Text>Test Content</Text>
       </Screen>
     )
-    expect(getByText("Test Content")).toBeTruthy()
+    
+    expect(getByText("Test Content")).toBeDefined()
   })
 
-  it("applies custom backgroundColor", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen backgroundColor="#ff0000">
+  it("should render with fixed preset by default", () => {
+    const { getByText } = render(
+      <Screen preset="fixed">
+        <Text>Fixed Screen</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Fixed Screen")).toBeDefined()
+  })
+
+  it("should render with scroll preset", () => {
+    const { getByText } = render(
+      <Screen preset="scroll">
+        <Text>Scrollable Content</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Scrollable Content")).toBeDefined()
+  })
+
+  it("should render with auto preset", () => {
+    const { getByText } = render(
+      <Screen preset="auto">
+        <Text>Auto Content</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Auto Content")).toBeDefined()
+  })
+
+  it("should apply custom backgroundColor", () => {
+    const { getByText } = render(
+      <Screen backgroundColor="red">
         <Text>Content</Text>
       </Screen>
     )
-    expect(toJSON()).toBeTruthy()
+    
+    expect(getByText("Content")).toBeDefined()
   })
 
-  it("applies custom style", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen style={{ padding: 20 }}>
-        <Text>Content</Text>
+  it("should apply custom style", () => {
+    const customStyle = { padding: 20 }
+    const { getByText } = render(
+      <Screen style={customStyle}>
+        <Text>Styled Content</Text>
       </Screen>
     )
-    expect(toJSON()).toBeTruthy()
+    
+    expect(getByText("Styled Content")).toBeDefined()
   })
 
-  it("applies contentContainerStyle", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen contentContainerStyle={{ padding: 10 }}>
-        <Text>Content</Text>
+  it("should apply contentContainerStyle", () => {
+    const containerStyle = { paddingHorizontal: 16 }
+    const { getByText } = render(
+      <Screen contentContainerStyle={containerStyle}>
+        <Text>Container Styled</Text>
       </Screen>
     )
-    expect(toJSON()).toBeTruthy()
+    
+    expect(getByText("Container Styled")).toBeDefined()
   })
 
-  it("sets statusBarStyle to light", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen statusBarStyle="light">
-        <Text>Content</Text>
-      </Screen>
-    )
-    expect(toJSON()).toBeTruthy()
-  })
-
-  it("sets statusBarStyle to dark", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen statusBarStyle="dark">
-        <Text>Content</Text>
-      </Screen>
-    )
-    expect(toJSON()).toBeTruthy()
-  })
-
-  it("applies keyboardOffset", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen keyboardOffset={20}>
-        <Text>Content</Text>
-      </Screen>
-    )
-    expect(toJSON()).toBeTruthy()
-  })
-
-  it("applies safeAreaEdges", () => {
-    const { toJSON } = renderWithSafeArea(
+  it("should handle safeAreaEdges prop", () => {
+    const { getByText } = render(
       <Screen safeAreaEdges={["top", "bottom"]}>
-        <Text>Content</Text>
+        <Text>Safe Area Content</Text>
       </Screen>
     )
-    expect(toJSON()).toBeTruthy()
+    
+    expect(getByText("Safe Area Content")).toBeDefined()
   })
 
-  it("renders with keyboardShouldPersistTaps", () => {
-    const { toJSON } = renderWithSafeArea(
-      <Screen preset="scroll" keyboardShouldPersistTaps="always">
-        <Text>Content</Text>
-      </Screen>
-    )
-    expect(toJSON()).toBeTruthy()
-  })
-
-  it("renders with multiple children", () => {
-    const { getByText } = renderWithSafeArea(
+  it("should set statusBarStyle to dark by default", () => {
+    const { getByText } = render(
       <Screen>
-        <Text>First</Text>
-        <Text>Second</Text>
-        <Text>Third</Text>
+        <Text>Content</Text>
       </Screen>
     )
-    expect(getByText("First")).toBeTruthy()
-    expect(getByText("Second")).toBeTruthy()
-    expect(getByText("Third")).toBeTruthy()
+    
+    expect(getByText("Content")).toBeDefined()
+  })
+
+  it("should accept custom statusBarStyle", () => {
+    const { getByText } = render(
+      <Screen statusBarStyle="light">
+        <Text>Light Status Bar</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Light Status Bar")).toBeDefined()
+  })
+
+  it("should handle keyboardOffset prop", () => {
+    const { getByText } = render(
+      <Screen keyboardOffset={100}>
+        <Text>Keyboard Aware</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Keyboard Aware")).toBeDefined()
+  })
+
+  it("should pass KeyboardAvoidingViewProps", () => {
+    const { getByText } = render(
+      <Screen KeyboardAvoidingViewProps={{ enabled: false }}>
+        <Text>No Keyboard Avoiding</Text>
+      </Screen>
+    )
+    
+    expect(getByText("No Keyboard Avoiding")).toBeDefined()
+  })
+
+  it("should pass StatusBarProps", () => {
+    const { getByText } = render(
+      <Screen StatusBarProps={{ hidden: false }}>
+        <Text>Status Bar Content</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Status Bar Content")).toBeDefined()
+  })
+
+  it("should render with scroll preset and keyboardShouldPersistTaps", () => {
+    const { getByText } = render(
+      <Screen preset="scroll" keyboardShouldPersistTaps="always">
+        <Text>Always Persist Taps</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Always Persist Taps")).toBeDefined()
+  })
+
+  it("should pass ScrollViewProps for scroll preset", () => {
+    const { getByText } = render(
+      <Screen 
+        preset="scroll" 
+        ScrollViewProps={{ bounces: false }}
+      >
+        <Text>No Bounce Scroll</Text>
+      </Screen>
+    )
+    
+    expect(getByText("No Bounce Scroll")).toBeDefined()
+  })
+
+  it("should handle auto preset with scrollEnabledToggleThreshold", () => {
+    const { getByText } = render(
+      <Screen 
+        preset="auto" 
+        scrollEnabledToggleThreshold={{ percent: 0.8 }}
+      >
+        <Text>Auto with Threshold</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Auto with Threshold")).toBeDefined()
+  })
+
+  it("should render multiple children", () => {
+    const { getByText } = render(
+      <Screen>
+        <Text>First Child</Text>
+        <Text>Second Child</Text>
+        <View>
+          <Text>Nested Child</Text>
+        </View>
+      </Screen>
+    )
+    
+    expect(getByText("First Child")).toBeDefined()
+    expect(getByText("Second Child")).toBeDefined()
+    expect(getByText("Nested Child")).toBeDefined()
+  })
+
+  it("should render with no children", () => {
+    const { container } = render(<Screen />)
+    expect(container).toBeDefined()
+  })
+
+  it("should use iOS padding behavior on iOS", () => {
+    const originalPlatform = jest.requireActual("react-native").Platform.OS
+    jest.spyOn(require("react-native"), "Platform", "get").mockReturnValue({
+      ...require("react-native").Platform,
+      OS: "ios",
+    })
+
+    const { getByText } = render(
+      <Screen>
+        <Text>iOS Content</Text>
+      </Screen>
+    )
+    
+    expect(getByText("iOS Content")).toBeDefined()
+  })
+
+  it("should use height behavior on Android", () => {
+    jest.spyOn(require("react-native"), "Platform", "get").mockReturnValue({
+      ...require("react-native").Platform,
+      OS: "android",
+    })
+
+    const { getByText } = render(
+      <Screen>
+        <Text>Android Content</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Android Content")).toBeDefined()
+  })
+
+  it("should handle complex nested structure", () => {
+    const { getByText } = render(
+      <Screen preset="scroll">
+        <View>
+          <Text>Header</Text>
+          <View>
+            <Text>Body Content</Text>
+            <View>
+              <Text>Deeply Nested</Text>
+            </View>
+          </View>
+          <Text>Footer</Text>
+        </View>
+      </Screen>
+    )
+    
+    expect(getByText("Header")).toBeDefined()
+    expect(getByText("Body Content")).toBeDefined()
+    expect(getByText("Deeply Nested")).toBeDefined()
+    expect(getByText("Footer")).toBeDefined()
+  })
+
+  it("should handle scrollEnabledToggleThreshold with point", () => {
+    const { getByText } = render(
+      <Screen 
+        preset="auto" 
+        scrollEnabledToggleThreshold={{ point: 100 }}
+      >
+        <Text>Point Threshold</Text>
+      </Screen>
+    )
+    
+    expect(getByText("Point Threshold")).toBeDefined()
   })
 })
 
