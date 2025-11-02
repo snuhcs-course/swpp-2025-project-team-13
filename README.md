@@ -1,4 +1,4 @@
-# Foodigram - Iteration 2 Demo
+# Foodigram - Iteration 3 Demo
 
 ## 📱 Project Overview
 
@@ -49,7 +49,7 @@ adb reverse tcp:8000 tcp:8000
 
 ## 🎯 Demo Features
 
-https://github.com/user-attachments/assets/22d484f0-d6fc-4e7c-a7cb-571468e34619
+https://github.com/user-attachments/assets/ddd71471-e539-42c1-99cc-56961c5035fb
 
 ### Core Functionality
 
