@@ -7,6 +7,9 @@ jest.doMock("react-native", () => {
   // Extend ReactNative
   return Object.setPrototypeOf(
     {
+      Alert: {
+        alert: jest.fn(),
+      },
       Image: {
         ...ReactNative.Image,
         resolveAssetSource: jest.fn((_source) => mockFile), // eslint-disable-line @typescript-eslint/no-unused-vars

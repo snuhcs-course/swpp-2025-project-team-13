@@ -15,12 +15,12 @@ jest.mock("../services/api", () => ({
         image_url: "https://example.com/restaurant.jpg",
         menus: [
           { name: "Menu 1", price: "10000.00", image_url: "https://example.com/menu1.jpg" },
-          { name: "Menu 2", price: "15000.00" }
-        ]
-      }
+          { name: "Menu 2", price: "15000.00" },
+        ],
+      },
     })),
-    toggleScrap: jest.fn(() => Promise.resolve({ ok: true, data: { scrapped: true } }))
-  }
+    toggleScrap: jest.fn(() => Promise.resolve({ ok: true, data: { scrapped: true } })),
+  },
 }))
 
 jest.mock("../models", () => ({
@@ -28,27 +28,27 @@ jest.mock("../models", () => ({
     foodHistoryStore: {
       isScrapped: jest.fn(() => false),
       toggleScrappedItem: jest.fn(),
-      scrappedItemsList: []
-    }
-  })
+      scrappedItemsList: [],
+    },
+  }),
 }))
 
 jest.mock("lucide-react-native", () => ({
   X: "X",
-  Bookmark: "Bookmark"
+  Bookmark: "Bookmark",
 }))
 
 describe("RestaurantDetailModal", () => {
   it("renders when visible", () => {
     const { getByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
     expect(getByText("음식점 정보")).toBeTruthy()
   })
 
   it("does not render when not visible", () => {
     const { queryByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={false} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={false} onClose={jest.fn()} />,
     )
     expect(queryByText("음식점 정보")).toBeNull()
   })
@@ -56,27 +56,25 @@ describe("RestaurantDetailModal", () => {
   it("calls onClose when modal is closed", () => {
     const onCloseMock = jest.fn()
     const { toJSON } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={onCloseMock} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={onCloseMock} />,
     )
     expect(toJSON()).toBeTruthy()
-    // Modal close functionality is tested visually
   })
 
   it("renders modal backdrop", () => {
     const onCloseMock = jest.fn()
     const { toJSON } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={onCloseMock} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={onCloseMock} />,
     )
     expect(toJSON()).toBeTruthy()
-    // Backdrop is part of the modal structure
   })
 
   it("loads restaurant detail when visible", async () => {
     const { api } = require("../services/api")
     render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    
+
     await waitFor(() => {
       expect(api.getRestaurantDetail).toHaveBeenCalledWith(1)
     })
@@ -84,9 +82,9 @@ describe("RestaurantDetailModal", () => {
 
   it("displays restaurant name", async () => {
     const { getByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    
+
     await waitFor(() => {
       expect(getByText("Test Restaurant")).toBeTruthy()
     })
@@ -94,9 +92,9 @@ describe("RestaurantDetailModal", () => {
 
   it("displays restaurant address", async () => {
     const { getByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    
+
     await waitFor(() => {
       expect(getByText("주소:")).toBeTruthy()
       expect(getByText("123 Test St")).toBeTruthy()
@@ -105,9 +103,9 @@ describe("RestaurantDetailModal", () => {
 
   it("displays restaurant phone", async () => {
     const { getByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    
+
     await waitFor(() => {
       expect(getByText("전화:")).toBeTruthy()
       expect(getByText("010-1234-5678")).toBeTruthy()
@@ -116,9 +114,9 @@ describe("RestaurantDetailModal", () => {
 
   it("displays menu section", async () => {
     const { getByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    
+
     await waitFor(() => {
       expect(getByText("메뉴")).toBeTruthy()
     })
@@ -126,9 +124,9 @@ describe("RestaurantDetailModal", () => {
 
   it("displays menu items", async () => {
     const { getByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    
+
     await waitFor(() => {
       expect(getByText("Menu 1")).toBeTruthy()
       expect(getByText("Menu 2")).toBeTruthy()
@@ -137,9 +135,9 @@ describe("RestaurantDetailModal", () => {
 
   it("formats menu prices correctly", async () => {
     const { getByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    
+
     await waitFor(() => {
       expect(getByText("10,000원")).toBeTruthy()
       expect(getByText("15,000원")).toBeTruthy()
@@ -148,12 +146,11 @@ describe("RestaurantDetailModal", () => {
 
   it("renders restaurant with scrap button", async () => {
     const { toJSON } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    
+
     await waitFor(() => {
       expect(toJSON()).toBeTruthy()
-      // Scrap button functionality is tested visually
     })
   })
 
@@ -163,7 +160,7 @@ describe("RestaurantDetailModal", () => {
     api.getRestaurantDetail.mockImplementation(() => Promise.resolve({ ok: false, problem: "error" }))
 
     const { getByText } = render(
-      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
 
     await waitFor(() => {
@@ -174,11 +171,11 @@ describe("RestaurantDetailModal", () => {
   it("does not load when restaurantId is null", () => {
     const { api } = require("../services/api")
     api.getRestaurantDetail.mockClear()
-    
+
     render(
-      <RestaurantDetailModal restaurantId={null} visible={true} onClose={jest.fn()} />
+      <RestaurantDetailModal restaurantId={null} visible={true} onClose={jest.fn()} />,
     )
-    
+
     expect(api.getRestaurantDetail).not.toHaveBeenCalled()
   })
 })

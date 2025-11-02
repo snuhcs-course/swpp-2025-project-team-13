@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react-native"
 import React from "react"
-import { View, Text } from "react-native"
+import { Text } from "react-native"
 import { Screen } from "./Screen"
 import { SafeAreaProvider } from "react-native-safe-area-context"
 import * as ReactNavigation from "@react-navigation/native"
@@ -28,7 +28,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen preset="fixed">
         <Text>Fixed Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -37,7 +37,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen preset="scroll">
         <Text>Scrollable Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -46,7 +46,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen preset="auto">
         <Text>Auto Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -55,7 +55,7 @@ describe("Screen", () => {
     const { getByText } = renderWithSafeArea(
       <Screen>
         <Text>Test Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(getByText("Test Content")).toBeTruthy()
   })
@@ -64,7 +64,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen backgroundColor="#ff0000">
         <Text>Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -73,7 +73,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen style={{ padding: 20 }}>
         <Text>Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -82,7 +82,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen contentContainerStyle={{ padding: 10 }}>
         <Text>Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -91,7 +91,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen statusBarStyle="light">
         <Text>Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -100,7 +100,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen statusBarStyle="dark">
         <Text>Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -109,7 +109,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen keyboardOffset={20}>
         <Text>Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -118,7 +118,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen safeAreaEdges={["top", "bottom"]}>
         <Text>Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -127,7 +127,7 @@ describe("Screen", () => {
     const { toJSON } = renderWithSafeArea(
       <Screen preset="scroll" keyboardShouldPersistTaps="always">
         <Text>Content</Text>
-      </Screen>
+      </Screen>,
     )
     expect(toJSON()).toBeTruthy()
   })
@@ -138,7 +138,7 @@ describe("Screen", () => {
         <Text>First</Text>
         <Text>Second</Text>
         <Text>Third</Text>
-      </Screen>
+      </Screen>,
     )
     expect(getByText("First")).toBeTruthy()
     expect(getByText("Second")).toBeTruthy()

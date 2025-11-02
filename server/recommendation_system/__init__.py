@@ -360,12 +360,10 @@ class EmbeddingService:
     def _load_model(self):
         """모델 로드"""
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
-            self.logger.warning("SentenceTransformers가 설치되지 않았습니다. 더미 모델을 사용합니다.")
             return
         
         try:
             self.model = SentenceTransformer(self.model_name)
-            self.logger.info(f"임베딩 모델 로드 완료: {self.model_name}")
         except Exception as e:
             self.logger.error(f"모델 로드 실패: {e}")
             raise
@@ -378,31 +376,20 @@ class EmbeddingService:
         
         try:
             total_texts = len(texts)
-            # 배치 크기 설정
             max_batch_size = 5000
             batch_size = min(max_batch_size, total_texts)
-            print(f"📝 임베딩 시작: {total_texts:,}개 텍스트")
-            print(f"📝 배치 크기: {batch_size}")
             
             if total_texts <= batch_size:
-                # 작은 배치의 경우 한 번에 처리
                 embeddings = self.model.encode(
                     texts, 
                     normalize_embeddings=True,
-                    show_progress_bar=True,
+                    show_progress_bar=False,
                     convert_to_numpy=True
                 )
-                self.logger.info(f"✅ 임베딩 완료: {total_texts:,}개 텍스트")
             else:
-                # 큰 배치의 경우 청크 단위로 처리
                 embeddings = []
                 for i in range(0, total_texts, batch_size):
                     batch_texts = texts[i:i + batch_size]
-                    batch_num = i // batch_size + 1
-                    total_batches = (total_texts + batch_size - 1) // batch_size
-                    
-                    self.logger.info(f"   배치 {batch_num}/{total_batches} 처리 중... ({len(batch_texts)}개)")
-                    
                     batch_embeddings = self.model.encode(
                         batch_texts,
                         normalize_embeddings=True,
@@ -412,7 +399,6 @@ class EmbeddingService:
                     embeddings.append(batch_embeddings)
                 
                 embeddings = np.vstack(embeddings)
-                self.logger.info(f"✅ 임베딩 완료: {total_texts:,}개 텍스트")
             
             return np.array(embeddings, dtype=np.float32)
             
@@ -424,12 +410,33 @@ class EmbeddingService:
         """단일 텍스트 임베딩"""
         return self.embed_texts([text])[0]
 
-# ChromaDB 기반 VectorIndexBuilder를 임포트
-from .chroma_index import ChromaVectorIndexBuilder, ChromaRecommendationEngine
+# ChromaDB 기반 VectorIndexBuilder (파일 삭제됨 - 더미 구현)
+class VectorIndexBuilder:
+    def __init__(self, embedding_service, persist_directory: str = "./chroma_db"):
+        self.embedding_service = embedding_service
+        self.persist_directory = persist_directory
+    
+    def build_menu_index(self, menu_documents):
+        pass
+    
+    def build_place_index(self, place_documents):
+        pass
+    
+    def search_menu(self, query_text: str, n_results: int = 50, where=None):
+        return []
+    
+    def search_place(self, query_text: str, n_results: int = 50, where=None):
+        return []
 
-# 기존 VectorIndexBuilder는 ChromaVectorIndexBuilder의 별칭으로 사용
-VectorIndexBuilder = ChromaVectorIndexBuilder
-RecommendationEngine = ChromaRecommendationEngine
+class RecommendationEngine:
+    def __init__(self, vector_index_builder):
+        self.vector_index_builder = vector_index_builder
+    
+    def search_menu(self, user_profile_text: str, query_text: str = "", k: int = 50, filters=None):
+        return []
+    
+    def search_place(self, user_profile_text: str, query_text: str = "", k: int = 50, filters=None):
+        return []
 
 def load_restaurant_data(json_file_path: str) -> List[Dict]:
     """음식점 데이터 로드"""

@@ -89,6 +89,15 @@ describe("OnboardingScreen", () => {
     expect(getByText("Salty Level: 5", { exact: false })).toBeTruthy();
   });
 
+  it("shows exploration slider and updates value", () => {
+    const { getByText, getByTestId } = render(<OnboardingScreen navigation={navigation} />);
+    // Initial value rendered (default 2)
+    expect(getByText("Food Exploration: 2")).toBeTruthy();
+    // Tap the highest value
+    fireEvent.press(getByTestId("explore-dot-5"));
+    expect(getByText("Food Exploration: 5")).toBeTruthy();
+  });
+
   it("displays allergies step", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     fireEvent.press(getByText("Next"));
