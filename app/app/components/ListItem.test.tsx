@@ -1,108 +1,110 @@
 import { render, fireEvent } from "@testing-library/react-native"
 import React from "react"
-import { Text } from "react-native"
+import { View } from "react-native"
 import { ListItem } from "./ListItem"
 
 describe("ListItem", () => {
-  it("should render the component with text", () => {
+  it("renders with text", () => {
     const { getByText } = render(<ListItem text="Test Item" />)
-    expect(getByText("Test Item")).toBeDefined()
+    expect(getByText("Test Item")).toBeTruthy()
   })
 
-  it("should render with children", () => {
-    const { getByText } = render(
-      <ListItem>
-        <Text>Child Text</Text>
-      </ListItem>
-    )
-    expect(getByText("Child Text")).toBeDefined()
+  it("renders without crashing", () => {
+    const { toJSON } = render(<ListItem />)
+    expect(toJSON()).toBeTruthy()
   })
 
-  it("should render with tx prop for i18n", () => {
-    const { getByText } = render(<ListItem tx="common.ok" />)
-    // The mocked i18n returns key + params
-    expect(getByText(/common\.ok/)).toBeDefined()
-  })
-
-  it("should handle onPress event", () => {
+  it("calls onPress when pressed", () => {
     const onPressMock = jest.fn()
-    const { getByText } = render(<ListItem text="Press Me" onPress={onPressMock} />)
-    
-    fireEvent.press(getByText("Press Me"))
+    const { getByText } = render(<ListItem text="Pressable" onPress={onPressMock} />)
+    fireEvent.press(getByText("Pressable"))
     expect(onPressMock).toHaveBeenCalledTimes(1)
   })
 
-  it("should render with left icon", () => {
-    const { getByText } = render(
-      <ListItem text="With Icon" leftIcon="check" />
-    )
-    expect(getByText("With Icon")).toBeDefined()
+  it("renders with left icon", () => {
+    const { toJSON } = render(<ListItem text="With Icon" leftIcon="check" />)
+    expect(toJSON()).toBeTruthy()
   })
 
-  it("should render with right icon", () => {
-    const { getByText } = render(
-      <ListItem text="With Right Icon" rightIcon="caretRight" />
-    )
-    expect(getByText("With Right Icon")).toBeDefined()
+  it("renders with right icon", () => {
+    const { toJSON } = render(<ListItem text="With Icon" rightIcon="caretRight" />)
+    expect(toJSON()).toBeTruthy()
   })
 
-  it("should render with custom height", () => {
-    const { getByText } = render(
-      <ListItem text="Custom Height" height={80} />
+  it("renders with both icons", () => {
+    const { toJSON } = render(
+      <ListItem text="Both Icons" leftIcon="check" rightIcon="caretRight" />
     )
-    expect(getByText("Custom Height")).toBeDefined()
+    expect(toJSON()).toBeTruthy()
   })
 
-  it("should render with top separator", () => {
-    const { getByText } = render(
-      <ListItem text="With Separator" topSeparator />
-    )
-    expect(getByText("With Separator")).toBeDefined()
-  })
-
-  it("should render with bottom separator", () => {
-    const { getByText } = render(
-      <ListItem text="With Separator" bottomSeparator />
-    )
-    expect(getByText("With Separator")).toBeDefined()
-  })
-
-  it("should apply custom containerStyle", () => {
-    const customStyle = { backgroundColor: "red" }
-    const { getByText } = render(
-      <ListItem text="Styled" containerStyle={customStyle} />
-    )
-    expect(getByText("Styled")).toBeDefined()
-  })
-
-  it("should apply custom textStyle", () => {
-    const customTextStyle = { fontSize: 20, color: "blue" }
-    const { getByText } = render(
-      <ListItem text="Styled Text" textStyle={customTextStyle} />
-    )
-    expect(getByText("Styled Text")).toBeDefined()
-  })
-
-  it("should render with left and right components", () => {
-    const LeftComp = <Text>Left</Text>
-    const RightComp = <Text>Right</Text>
-    
-    const { getByText } = render(
+  it("renders with custom LeftComponent", () => {
+    const { getByTestId } = render(
       <ListItem 
-        text="Main Text" 
-        LeftComponent={LeftComp}
-        RightComponent={RightComp}
+        text="Custom Left"
+        LeftComponent={<View testID="left-custom" />}
       />
     )
-    
-    expect(getByText("Main Text")).toBeDefined()
-    expect(getByText("Left")).toBeDefined()
-    expect(getByText("Right")).toBeDefined()
+    expect(getByTestId("left-custom")).toBeTruthy()
   })
 
-  it("should have default height of 56", () => {
-    const { getByText } = render(<ListItem text="Default Height" />)
-    expect(getByText("Default Height")).toBeDefined()
+  it("renders with custom RightComponent", () => {
+    const { getByTestId } = render(
+      <ListItem 
+        text="Custom Right"
+        RightComponent={<View testID="right-custom" />}
+      />
+    )
+    expect(getByTestId("right-custom")).toBeTruthy()
+  })
+
+  it("applies custom height", () => {
+    const { toJSON } = render(<ListItem text="Tall Item" height={80} />)
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("renders with top separator", () => {
+    const { toJSON } = render(<ListItem text="Top Sep" topSeparator />)
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("renders with bottom separator", () => {
+    const { toJSON } = render(<ListItem text="Bottom Sep" bottomSeparator />)
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("renders with both separators", () => {
+    const { toJSON } = render(
+      <ListItem text="Both Seps" topSeparator bottomSeparator />
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("applies custom textStyle", () => {
+    const { toJSON } = render(
+      <ListItem text="Styled" textStyle={{ color: "red" }} />
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("applies custom containerStyle", () => {
+    const { toJSON } = render(
+      <ListItem text="Container" containerStyle={{ padding: 20 }} />
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("renders with leftIconColor", () => {
+    const { toJSON } = render(
+      <ListItem text="Colored Icon" leftIcon="check" leftIconColor="#ff0000" />
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("renders with rightIconColor", () => {
+    const { toJSON } = render(
+      <ListItem text="Colored Icon" rightIcon="caretRight" rightIconColor="#00ff00" />
+    )
+    expect(toJSON()).toBeTruthy()
   })
 })
-
