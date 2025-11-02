@@ -3,13 +3,24 @@ import React from "react"
 import { View, Text } from "react-native"
 import { Screen } from "./Screen"
 import { SafeAreaProvider } from "react-native-safe-area-context"
+import * as ReactNavigation from "@react-navigation/native"
+
+// Mock useScrollToTop to avoid requiring a navigator/route context in unit tests
+jest.mock("@react-navigation/native", () => {
+  const actual = jest.requireActual("@react-navigation/native")
+  return {
+    ...actual,
+    useScrollToTop: jest.fn(),
+  }
+})
 
 const renderWithSafeArea = (component: React.ReactElement) => {
-  return render(
-    <SafeAreaProvider>
-      {component}
-    </SafeAreaProvider>
-  )
+  // Provide initial metrics so hooks depending on safe area can compute styles synchronously in tests
+  const initialMetrics = {
+    frame: { x: 0, y: 0, width: 320, height: 640 },
+    insets: { top: 0, bottom: 0, left: 0, right: 0 },
+  }
+  return render(<SafeAreaProvider initialMetrics={initialMetrics}>{component}</SafeAreaProvider>)
 }
 
 describe("Screen", () => {

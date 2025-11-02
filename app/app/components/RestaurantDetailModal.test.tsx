@@ -159,12 +159,13 @@ describe("RestaurantDetailModal", () => {
 
   it("shows error message when restaurant loading fails", async () => {
     const { api } = require("../services/api")
-    api.getRestaurantDetail.mockResolvedValueOnce({ ok: false, problem: "error" })
-    
+    // Ensure ALL calls in this test return an error (StrictMode may trigger multiple renders)
+    api.getRestaurantDetail.mockImplementation(() => Promise.resolve({ ok: false, problem: "error" }))
+
     const { getByText } = render(
       <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />
     )
-    
+
     await waitFor(() => {
       expect(getByText("음식점 정보를 불러올 수 없습니다")).toBeTruthy()
     })

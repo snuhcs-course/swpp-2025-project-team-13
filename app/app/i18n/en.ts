@@ -5,6 +5,7 @@ const en = {
     ok: "OK!",
     cancel: "Cancel",
     back: "Back",
+    accept: "Accept",
   },
   welcomeScreen: {
     postscript:

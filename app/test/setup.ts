@@ -60,6 +60,31 @@ jest.mock("aws-amplify/storage", () => ({
   uploadData: jest.fn(),
 }))
 
+jest.mock("lucide-react-native", () => ({
+  X: "X",
+  Heart: "Heart",
+  Bookmark: "Bookmark",
+  Home: "Home",
+  User: "User",
+  Users: "Users",
+  Filter: "Filter",
+  RefreshCw: "RefreshCw",
+  Settings: "Settings",
+  MapPin: "MapPin",
+  Star: "Star",
+  Clock: "Clock",
+  DollarSign: "DollarSign",
+  ChevronRight: "ChevronRight",
+  ChevronLeft: "ChevronLeft",
+  Search: "Search",
+  Camera: "Camera",
+  Image: "Image",
+  LogOut: "LogOut",
+  Check: "Check",
+  Plus: "Plus",
+  Minus: "Minus",
+}))
+
 jest.mock("../app/i18n/i18n.ts", () => ({
   i18n: {
     locale: "en",
