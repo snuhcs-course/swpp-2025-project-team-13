@@ -81,5 +81,5 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
 class UserGalleryImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserGalleryImage
-        fields = ("id", "user", "image_url", "created_at")
+        fields = ("id", "user", "image_url", "created_at", "local_uri")
         read_only_fields = ("created_at",)

@@ -42,7 +42,7 @@ export function useAlbumScanner() {
             return;
         }
 
-        const response = await api.uploadPhoto(photoUrl);
+        const response = await api.uploadPhoto(photoUrl, asset.uri);
         if (response.ok) {
             console.log("Sent photo url to server");
             onFoodFound(asset);

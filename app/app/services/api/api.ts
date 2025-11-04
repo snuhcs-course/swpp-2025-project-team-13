@@ -257,7 +257,7 @@ export class Api {
     return this.apisauce.patch("/onboarding/update/", preferences)
   }
 
-  async uploadPhoto(photoUrl: string) {
+  async uploadPhoto(photoUrl: string, photoUri: string) {
     // ensure csrf header is present; get it if missing
     // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
     const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
@@ -265,7 +265,18 @@ export class Api {
       await this.getCsrf()
     }
     await this.attachCookiesHeader()
-    return this.apisauce.post("/photos/", { photo_url: photoUrl })
+    return this.apisauce.post("/photos/", { photo_url: photoUrl, local_uri: photoUri})
+  }
+
+  async getUserPhotos(): Promise<any[]> {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return (await this.apisauce.get("/photos/")).data;
   }
 
   private async attachCookiesHeader() {

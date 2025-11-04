@@ -53,6 +53,7 @@ class UserGalleryImage(models.Model):
     category_tag = models.CharField(max_length=100, blank=True)
     embedding = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    local_uri = models.CharField(max_length=100, blank=True)
 
     class Meta:
         indexes = [

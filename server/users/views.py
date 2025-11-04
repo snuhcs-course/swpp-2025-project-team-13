@@ -18,7 +18,7 @@ class PhotoViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        photo = services.upload_user_photo(user=request.user, photo_url=request.data["photo_url"])
+        photo = services.upload_user_photo(user=request.user, photo_url=request.data["photo_url"], local_uri=request.data["local_uri"])
         serializer = UserGalleryImageSerializer(photo)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
