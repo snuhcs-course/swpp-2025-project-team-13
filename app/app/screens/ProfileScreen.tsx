@@ -205,24 +205,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
 
       <ScrollView style={$scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Section */}
-<<<<<<< HEAD
-        <View style={$profileSection}>
-          <View style={$profileImageContainer}>
-            <Image
-              style={$profileImage}
-              resizeMode="cover"
-            />
-          </View>
-          <Text style={$userName}>{user.name}</Text>
-
-          <TouchableOpacity
-            testID="settings-button"
-            style={$editButton}
-            onPress={() => setIsPreferencesModalVisible(true)}
-          >
-            <Text style={$editButtonText}>취향 설정</Text>
-          </TouchableOpacity>
-=======
         <View style={$profileSectionHorizontal}>
           <TouchableOpacity testID="profile-logout-button" onPress={() => logout()}>
             <Text style={$userNameHorizontal}>{user.name}</Text>
@@ -243,7 +225,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
               <Settings size={24} color={colors.palette.neutral700} strokeWidth={2} />
             </TouchableOpacity>
           </View>
->>>>>>> 30c5877 (feat: frontend mypage redesign & CLIP embedding applied; manual label change supported)
         </View>
 
         {/* Content */}

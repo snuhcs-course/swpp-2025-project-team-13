@@ -1,18 +1,14 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-<<<<<<< HEAD
-from .models import User, Profile, Follow, UserGalleryImage
-from .image_utils import _read_image_from_s3, get_clip_embedding_from_bytes, get_food_image_category, normalize_to_onboarding_category
-=======
 from django.utils import timezone
 import logging
 
 from users.image_utils import get_food_image_with_alternatives, get_food_image_with_alternatives_from_bytes
 from .models import User, Profile, Follow, UserGalleryImage
+from .image_utils import _read_image_from_s3, get_clip_embedding_from_bytes, get_food_image_category, normalize_to_onboarding_category
 
 logger = logging.getLogger(__name__)
 
->>>>>>> 30c5877 (feat: frontend mypage redesign & CLIP embedding applied; manual label change supported)
 
 @transaction.atomic
 def create_user_with_profile(*, username: str, email: str, password: str, bio: str = "", preferences: dict | None = None) -> User:
@@ -115,7 +111,6 @@ def upload_user_photo(*, user: User, photo_url: str, local_uri: str, image_bytes
 
     return photo
 
-<<<<<<< HEAD
 def upload_user_photo_with_embedding(*, user: User, photo_url: str):
     img_bytes = _read_image_from_s3(photo_url)
     emb = get_clip_embedding_from_bytes(img_bytes)
@@ -136,7 +131,7 @@ def upload_user_photo_with_embedding(*, user: User, photo_url: str):
     )
 
     return photo
-=======
+
 @transaction.atomic
 def update_image_label(*, photo: UserGalleryImage, new_label: str) -> UserGalleryImage:
     """
@@ -324,4 +319,3 @@ def search_foodlist(query: str) -> dict:
 def list_user_photos(*, user: User):
     """List user's photos with their labels"""
     return UserGalleryImage.objects.filter(user=user).order_by("-created_at")
->>>>>>> 30c5877 (feat: frontend mypage redesign & CLIP embedding applied; manual label change supported)

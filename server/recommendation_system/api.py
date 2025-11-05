@@ -33,7 +33,6 @@ from .unified_embeddings import (
 from .rl_scoring import get_rl_scorer, ScoringWeights
 from .scoring_strategy import ScoringContext, HybridScoringStrategy
 # ChromaDB 관련 import (더 이상 사용 안함 - client.py로 대체)
-# from . import EmbeddingService, VectorIndexBuilder, RecommendationEngine
 from users.models import UserPreference, UserGalleryImage, UserScrap
 from recommendation.models import MenuReasonFeatures, MenuExternalMapping, RestaurantExternalMapping
 from menu.models import Menu
@@ -461,7 +460,6 @@ def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_servi
 #         # ... (주석 처리됨)
 # ===== 구버전 API 끝 =====
 
-<<<<<<< HEAD
 def calculate_gallery_exploration_preference(user_id: int, min_images: int = 10) -> Optional[float]:
     """
     사용자 갤러리 이미지 카테고리 분포로 탐험성 점수(0~5) 계산
@@ -541,12 +539,7 @@ def derive_preferred_categories_from_scraps(user_id: int, top_k: int = 3, min_co
         logger.info(f"스크랩 기반 선호 카테고리(user_id={user_id}): {top_categories}")
     return top_categories
 
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-=======
 @require_http_methods(["POST"])
->>>>>>> 7ef638e (feat: RL-based recommendation & context processing query with unified embeddings)
 def recommend_menu(request):
     """메뉴 추천 API - Using StreamingHttpResponse with proper chunking for real-time delivery"""
     # Manually check authentication
@@ -635,12 +628,12 @@ def recommend_menu(request):
                 'budget_range': data.get('budget_range', [0, 0]),
                 'distance_preference': data.get('distance_preference', 2.0)
             }
-        # 갤러리 카테고리 다양성 기반 exploration_preference 보정
+        # 갤러리 카테고리 다양성 기반 exploration_preference 보정 (Chroma 미사용, ORM 기반)
         ep_from_gallery = calculate_gallery_exploration_preference(request.user.id, min_images=10)
         if ep_from_gallery is not None:
             exploration_preference = ep_from_gallery
             logger.info(f"갤러리 기반 exploration_preference 적용: {exploration_preference}")
-        
+
         # 스크랩 기반 상위 카테고리를 선호 카테고리에 병합 (기존 로직 보존 + 보강)
         try:
             scrap_pref_cats = derive_preferred_categories_from_scraps(request.user.id, top_k=3, min_count=1)
