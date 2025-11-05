@@ -88,5 +88,22 @@ export function useAlbumScanner() {
         }
     }
 
-    return { scanAlbums };
+    // New: upload a limited list of picked image URIs (e.g., from ImagePicker)
+    async function uploadPickedUris(uris: string[], onFoodFound: (uri: string) => void, albumTitle = "manual") {
+        const limited = uris.slice(0, 30);
+        for (const uri of limited) {
+            // Create a minimal fake asset to reuse existing upload pipeline
+            const fakeAsset = { uri } as unknown as MediaLibrary.Asset;
+            const isFood = await isFoodImage(uri);
+            if (!isFood) continue;
+            const photoUrl = await sendImageToS3(albumTitle, fakeAsset);
+            if (!photoUrl) continue;
+            const response = await api.uploadPhoto(photoUrl, uri);
+            if (response.ok) {
+                onFoodFound(uri);
+            }
+        }
+    }
+
+    return { scanAlbums, uploadPickedUris };
 };

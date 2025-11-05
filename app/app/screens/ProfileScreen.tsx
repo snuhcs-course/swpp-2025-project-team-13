@@ -3,7 +3,9 @@ import { api } from "app/services/api"
 import { getImage as getImageName } from "app/utils/imagenameFromAsseturi"
 import * as storage from "app/utils/storage"
 import { Asset } from "expo-media-library"
-import { Home, Plus, User } from "lucide-react-native"
+// @ts-ignore - installed later or mocked in tests
+import * as ImagePicker from "expo-image-picker"
+import { Home, User } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
 import React, { useEffect, useState } from "react"
 import {
@@ -25,7 +27,7 @@ interface ProfileScreenProps extends AppStackScreenProps<"Profile"> {}
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function ProfileScreen({ navigation }) {
   const { foodHistoryStore, menuScrapStore } = useStores()
-  const { scanAlbums } = useAlbumScanner();
+  const { scanAlbums, uploadPickedUris } = useAlbumScanner();
   const screenWidth = Dimensions.get('window').width
   const imageSize = (screenWidth - spacing.lg * 2 - spacing.sm) / 2 // 2 columns with padding
   const [userName, setUserName] = useState("")
@@ -56,18 +58,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   }, [])
 
   async function getUserPhotos() {
-    const photo_list = await api.getUserPhotos();
+    const photo_list = await api.getUserPhotos()
 
-    const currentImages = photo_list
-      .filter(photo => photo.local_uri)
-      .map(photo => ({
-        id: photo.local_uri,
+    // Render from server-provided image_url so photos persist across app restarts
+    const currentImages = (photo_list ?? [])
+      .filter((p: any) => !!p?.image_url)
+      .map((p: any) => ({
+        id: String(p.id ?? p.image_url),
         type: 'user',
-        image: { uri: photo.local_uri },
-        name: "User food photo"
-      }));
+        image: { uri: p.image_url },
+        name: 'User food photo',
+      }))
 
-    setUserImages(prevImages => [...prevImages, ...currentImages]);
+    // Merge without duplicating already-loaded items
+    setUserImages(prev => {
+      const seen = new Set(prev.map(i => i.id))
+      const added = currentImages.filter(i => !seen.has(i.id))
+      return [...prev, ...added]
+    })
   }
   useEffect(() => { getUserPhotos(); }, []);
 
@@ -256,24 +264,54 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
         </TouchableOpacity>
       </View>
 
-      {/* Floating Add Button - Only show on My Photos tab */}
+      {/* Floating Upload Buttons - Only show on My Photos tab */}
       {activeTab === 'photos' && (
-        <TouchableOpacity
-          testID="refresh-button"
-          style={$floatingButton}
-          onPress={() => {
-            scanAlbums((asset: Asset) => {
-              setUserImages(userImages => [...userImages, {
-                id: asset.id,
-                type: 'user',
-                image: { uri: asset.uri },
-                name: getImageName(asset),
-              }]);
-            })
-          }}
-        >
-          <Plus size={32} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={$floatingButtonsRow}>
+          <TouchableOpacity
+            testID="upload-all-button"
+            style={$floatingButtonSmall}
+            onPress={() => {
+              scanAlbums((asset: Asset) => {
+                setUserImages(userImages => {
+                  const id = asset.id
+                  if (userImages.some(i => i.id === id)) return userImages
+                  return [...userImages, {
+                    id,
+                    type: 'user',
+                    image: { uri: asset.uri },
+                    name: getImageName(asset),
+                  }]
+                })
+              })
+            }}
+          >
+            <Text style={$floatingButtonText}>전체 업로드</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="upload-10-button"
+            style={$floatingButtonSmall}
+            onPress={async () => {
+              const res = await ImagePicker.launchImageLibraryAsync({
+                allowsMultipleSelection: true,
+                selectionLimit: 10,
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 1,
+              })
+              if (res.canceled || !res.assets?.length) return
+              const uris = res.assets.map((a: any) => a.uri).slice(0, 10)
+
+              await uploadPickedUris(uris, (uri: string) => {
+                setUserImages(prev => {
+                  if (prev.some(i => i.id === uri)) return prev
+                  return [...prev, { id: uri, type: 'user', image: { uri }, name: 'User food photo' }]
+                })
+              })
+            }}
+          >
+            <Text style={$floatingButtonText}>10장 업로드</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Restaurant Detail Modal */}
@@ -486,22 +524,30 @@ const $tabButtonTextActive: TextStyle = {
   fontWeight: "600",
 }
 
-const $floatingButton: ViewStyle = {
+const $floatingButtonsRow: ViewStyle = {
   position: "absolute",
-  bottom: spacing.xl + 80, // Above bottom tabs
-  right: spacing.xl,
-  width: 64,
-  height: 64,
-  borderRadius: 32,
+  bottom: spacing.xl + 80,
+  right: spacing.lg,
+  flexDirection: "row",
+  gap: spacing.sm,
+}
+
+const $floatingButtonSmall: ViewStyle = {
   backgroundColor: colors.palette.primary500,
+  paddingHorizontal: 16,
+  height: 44,
+  borderRadius: 22,
   alignItems: "center",
   justifyContent: "center",
   shadowColor: "#000",
-  shadowOffset: {
-    width: 0,
-    height: 4,
-  },
+  shadowOffset: { width: 0, height: 4 },
   shadowOpacity: 0.3,
   shadowRadius: 8,
   elevation: 8,
 }
+
+const $floatingButtonText: TextStyle = {
+  color: "#FFFFFF",
+  fontSize: 14,
+  fontWeight: "700",
+} 
