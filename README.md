@@ -26,6 +26,13 @@ npm install -g @aws-amplify/cli
 amplify pull --appId dhwiac5kwn2e4 --envName dev
 ```
 
+## Native modules required
+
+```bash
+- expo-image-picker (gallery multi-select for “10장 업로드”)
+- expo-location (온보딩 위치 사용)
+```
+
 ### Backend Setup
 
 ```bash
