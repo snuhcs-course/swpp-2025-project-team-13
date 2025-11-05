@@ -31,6 +31,10 @@ amplify pull --appId dhwiac5kwn2e4 --envName dev
 ```bash
 - expo-image-picker (gallery multi-select for “10장 업로드”)
 - expo-location (온보딩 위치 사용)
+
+cd app
+npm config set legacy-peer-deps true
+npx expo install expo-image-picker expo-location
 ```
 
 ### Backend Setup
