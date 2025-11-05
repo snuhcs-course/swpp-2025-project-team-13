@@ -6,7 +6,8 @@
  * https://reactnative.dev/docs/security#storing-sensitive-info
  */
 export default {
-  API_URL: "http://147.46.78.29:8001/api/v1",
+  API_URL: "https://5c972eb32ea5.ngrok-free.app/api/v1",
+  // API_URL: "http://147.46.78.29:8001/api/v1",
   
   // Localhost
   // Android emulator uses 10.0.2.2 to access host machine's localhost
