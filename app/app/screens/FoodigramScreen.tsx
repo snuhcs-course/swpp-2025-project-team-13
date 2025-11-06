@@ -216,7 +216,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         {/* Bottom Info */}
         <View style={$bottomInfo}>
           <View style={$restaurantNameContainer}>
-          <Text style={$restaurantName} numberOfLines={2}>
+          <Text style={$restaurantName} numberOfLines={1} ellipsizeMode="tail">
             {menu.place_name}
           </Text>
           <TouchableOpacity
@@ -463,6 +463,7 @@ const $restaurantNameContainer: ViewStyle = {
   justifyContent: "space-between",
   alignItems: "center",
   width: "100%",
+  gap: spacing.sm,
 }
 
 const $restaurantName: TextStyle = {
@@ -471,6 +472,8 @@ const $restaurantName: TextStyle = {
   color: "#fff",
   marginBottom: 4,
   lineHeight: 36,
+  flex: 1,
+  flexShrink: 1,
 }
 
 const $restaurantDetails: TextStyle = {
