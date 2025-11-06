@@ -13,7 +13,7 @@ import {
   View, ViewStyle,
   ListRenderItem
 } from "react-native"
-import { Text } from "../components"
+import { ScrapToast, Text } from "../components"
 import { useStores } from "../models"
 import { AppStackScreenProps } from "../navigators"
 import { api } from "../services/api"
@@ -35,6 +35,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMoreData, setHasMoreData] = useState(true)
   const [currentMaxResults, setCurrentMaxResults] = useState(10)
+  const [showScrapToast, setShowScrapToast] = useState(false)
   const flatListRef = useRef<FlatList>(null)
 
   // Fetch recommendations function
@@ -150,7 +151,8 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   const toggleBookmark = useCallback((menu: MenuRecommendationItem) => {
     const imageUrl = menu.image_urls && menu.image_urls.length > 0 ? menu.image_urls[0] : undefined
     
-    menuScrapStore.toggleScrappedMenu({
+    const wasScrapped = menuScrapStore.isScrapped(menu.id)
+    const isNowScrapped = menuScrapStore.toggleScrappedMenu({
       id: menu.id,
       menu_name: menu.menu_name,
       place_name: menu.place_name,
@@ -162,6 +164,11 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
       image_url: imageUrl,
       coordinates: menu.coordinates,
     })
+    
+    // Show toast only when item is newly scrapped (wasn't scrapped before, but is now)
+    if (!wasScrapped && isNowScrapped) {
+      setShowScrapToast(true)
+    }
   }, [menuScrapStore])
 
   const screenHeight = Dimensions.get("window").height
@@ -327,6 +334,13 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         windowSize={5}
         initialNumToRender={2}
         updateCellsBatchingPeriod={50}
+      />
+
+      {/* Scrap Toast */}
+      <ScrapToast
+        visible={showScrapToast}
+        onDismiss={() => setShowScrapToast(false)}
+        onNavigate={() => navigation.navigate("Scrap")}
       />
 
       {/* Bottom Tabs */}
