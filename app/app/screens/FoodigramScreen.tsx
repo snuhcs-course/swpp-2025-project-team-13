@@ -247,7 +247,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
             </Text>
             {menu.reason && (
               <Text style={$menuReasonLarge} numberOfLines={2}>
-                {menu.category} 카테고리
+                {menu.category}
               </Text>
             )}
           </View>
