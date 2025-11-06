@@ -3,7 +3,7 @@ import { api } from "app/services/api"
 import { getImage as getImageName } from "app/utils/imagenameFromAsseturi"
 import * as storage from "app/utils/storage"
 import { Asset } from "expo-media-library"
-import { Home, Plus, User } from "lucide-react-native"
+import { Bookmark, Home, Plus, User } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
 import React, { useEffect, useState } from "react"
 import {
@@ -24,12 +24,11 @@ import { colors, spacing } from "../theme"
 interface ProfileScreenProps extends AppStackScreenProps<"Profile"> { }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function ProfileScreen({ navigation }) {
-  const { foodHistoryStore, menuScrapStore } = useStores()
+  const { foodHistoryStore } = useStores()
   const { scanAlbums } = useAlbumScanner();
   const screenWidth = Dimensions.get('window').width
   const imageSize = (screenWidth - spacing.lg * 2 - spacing.sm) / 2 // 2 columns with padding
   const [userName, setUserName] = useState("")
-  const [activeTab, setActiveTab] = useState<'photos' | 'restaurants'>('photos')
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<number | null>(null)
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isPreferencesModalVisible, setIsPreferencesModalVisible] = useState(false)
@@ -56,9 +55,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   }, [])
 
   async function getUserPhotos() {
-    const photo_list = await api.getUserPhotos();
+    const photoList = await api.getUserPhotos();
 
-    const currentImages = photo_list
+    const currentImages = photoList
       .filter(photo => photo.local_uri)
       .map(photo => ({
         id: photo.local_uri,
@@ -75,9 +74,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   const user = {
     name: userName,
   }
-
-  // Get scrapped menus from store
-  const scrappedMenus = menuScrapStore.scrappedMenusList
 
   // Get scrapped items from store
   const scrappedFoods = foodHistoryStore.scrappedItemsList
@@ -139,109 +135,38 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
           </TouchableOpacity>
         </View>
 
-        {/* Tab Navigation */}
-        <View style={$tabContainer}>
-          <TouchableOpacity
-            style={[$tab, activeTab === 'photos' && $tabActive]}
-            onPress={() => setActiveTab('photos')}
-          >
-            <Text style={[
-              $tabText,
-              activeTab === 'photos' && $tabTextActive
-            ]}>
-              히스토리
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[$tab, activeTab === 'restaurants' && $tabActive]}
-            onPress={() => setActiveTab('restaurants')}
-          >
-            <Text style={[
-              $tabText,
-              activeTab === 'restaurants' && $tabTextActive
-            ]}>
-              찜한 메뉴
-            </Text>
-          </TouchableOpacity>
+        {/* Content */}
+        <View style={$gridContainer}>
+          {allPhotos.length === 0 ? (
+            <View style={$emptyState}>
+              <Text style={$emptyText}>사진이 아직 없습니다</Text>
+              <Text style={$emptySubtext}>
+                갤러리에서 사진을 추가해보세요
+              </Text>
+            </View>
+          ) : (
+            <View style={$photoGrid}>
+              {allPhotos.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[$photoCard, { width: imageSize, height: imageSize }]}
+                  onPress={() => {
+                    if (item.type === 'scrapped') {
+                      setSelectedRestaurantId(parseInt(item.id))
+                      setIsModalVisible(true)
+                    }
+                  }}
+                >
+                  <Image
+                    source={item.image}
+                    style={$photoImage}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
-
-        {/* Content based on active tab */}
-        {activeTab === 'photos' ? (
-          <View style={$gridContainer}>
-            {allPhotos.length === 0 ? (
-              <View style={$emptyState}>
-                <Text style={$emptyText}>사진이 아직 없습니다</Text>
-                <Text style={$emptySubtext}>
-                  갤러리에서 사진을 추가해보세요
-                </Text>
-              </View>
-            ) : (
-              <View style={$photoGrid}>
-                {allPhotos.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[$photoCard, { width: imageSize, height: imageSize }]}
-                    onPress={() => {
-                      if (item.type === 'scrapped') {
-                        setSelectedRestaurantId(parseInt(item.id))
-                        setIsModalVisible(true)
-                      }
-                    }}
-                  >
-                    <Image
-                      source={item.image}
-                      style={$photoImage}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={$gridContainer}>
-            {scrappedMenus.length === 0 ? (
-              <View style={$emptyState}>
-                <Text style={$emptyText}>찜한 메뉴가 없습니다</Text>
-                <Text style={$emptySubtext}>
-                  추천 메뉴에서 음식을 스크랩해보세요
-                </Text>
-              </View>
-            ) : (
-              <View style={$photoGrid}>
-                {scrappedMenus.map((menu) => (
-                  <TouchableOpacity
-                    key={menu.id}
-                    style={[$photoCard, { width: imageSize, height: imageSize }]}
-                  >
-                    {menu.image_url ? (
-                      <Image
-                        source={{ uri: menu.image_url }}
-                        style={$photoImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[$photoImage, $placeholderImage]}>
-                        <Text style={$placeholderText}>이미지 없음</Text>
-                      </View>
-                    )}
-                    <View style={$menuOverlay}>
-                      <Text style={$menuOverlayTitle} numberOfLines={1}>
-                        {menu.menu_name}
-                      </Text>
-                      <Text style={$menuOverlaySubtitle} numberOfLines={1}>
-                        {menu.place_name}
-                      </Text>
-                      <Text style={$menuOverlayPrice}>
-                        ₩{menu.price.toLocaleString()}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
       </ScrollView>
 
       {/* Bottom Tabs */}
@@ -262,6 +187,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
 
         <TouchableOpacity
           style={$tabButton}
+          testID="ScrapTab"
+          onPress={() => {
+            if (__DEV__) {
+              console.log(`Profile: navigated to Scrap`)
+            }
+            navigation.navigate("Scrap")
+          }}
+        >
+          <Bookmark size={24} color={colors.palette.neutral400} strokeWidth={2} />
+          <Text style={$tabButtonText}>스크랩</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={$tabButton}
           testID="UserTab"
           onPress={() => {
             if (__DEV__) {
@@ -275,25 +214,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
         </TouchableOpacity>
       </View>
 
-      {/* Floating Add Button - Only show on My Photos tab */}
-      {activeTab === 'photos' && (
-        <TouchableOpacity
-          testID="refresh-button"
-          style={$floatingButton}
-          onPress={() => {
-            scanAlbums((asset: Asset) => {
-              setUserImages(userImages => [...userImages, {
-                id: asset.id,
-                type: 'user',
-                image: { uri: asset.uri },
-                name: getImageName(asset),
-              }]);
-            })
-          }}
-        >
-          <Plus size={32} color="#FFFFFF" />
-        </TouchableOpacity>
-      )}
+      {/* Floating Add Button */}
+      <TouchableOpacity
+        testID="refresh-button"
+        style={$floatingButton}
+        onPress={() => {
+          scanAlbums((asset: Asset) => {
+            setUserImages(userImages => [...userImages, {
+              id: asset.id,
+              type: 'user',
+              image: { uri: asset.uri },
+              name: getImageName(asset),
+            }]);
+          })
+        }}
+      >
+        <Plus size={32} color="#FFFFFF" />
+      </TouchableOpacity>
 
       {/* Restaurant Detail Modal */}
       <RestaurantDetailModal
@@ -359,35 +296,6 @@ const $editButtonText: TextStyle = {
   fontWeight: "bold",
 }
 
-const $tabContainer: ViewStyle = {
-  flexDirection: "row",
-  borderBottomWidth: 1,
-  borderBottomColor: colors.palette.neutral200,
-  marginTop: spacing.md,
-}
-
-const $tab: ViewStyle = {
-  flex: 1,
-  paddingVertical: spacing.md,
-  alignItems: "center",
-  borderBottomWidth: 3,
-  borderBottomColor: "transparent",
-}
-
-const $tabActive: ViewStyle = {
-  borderBottomColor: colors.palette.primary500,
-}
-
-const $tabText: TextStyle = {
-  fontSize: 14,
-  fontWeight: "bold",
-  color: colors.palette.neutral500,
-}
-
-const $tabTextActive: TextStyle = {
-  color: colors.palette.primary500,
-}
-
 const $gridContainer: ViewStyle = {
   paddingTop: spacing.md,
 }
@@ -409,47 +317,6 @@ const $photoCard: ViewStyle = {
 const $photoImage: ImageStyle = {
   width: "100%",
   height: "100%",
-}
-
-const $placeholderImage: ViewStyle = {
-  backgroundColor: colors.palette.neutral300,
-  justifyContent: "center",
-  alignItems: "center",
-}
-
-const $placeholderText: TextStyle = {
-  color: colors.palette.neutral500,
-  fontSize: 12,
-  fontWeight: "500",
-}
-
-const $menuOverlay: ViewStyle = {
-  position: "absolute",
-  bottom: 0,
-  left: 0,
-  right: 0,
-  backgroundColor: "rgba(0,0,0,0.7)",
-  paddingVertical: spacing.xs,
-  paddingHorizontal: spacing.sm,
-}
-
-const $menuOverlayTitle: TextStyle = {
-  color: "#fff",
-  fontSize: 13,
-  fontWeight: "700",
-  marginBottom: 2,
-}
-
-const $menuOverlaySubtitle: TextStyle = {
-  color: "rgba(255,255,255,0.85)",
-  fontSize: 11,
-  marginBottom: 2,
-}
-
-const $menuOverlayPrice: TextStyle = {
-  color: "#fff",
-  fontSize: 11,
-  fontWeight: "600",
 }
 
 const $emptyState: ViewStyle = {

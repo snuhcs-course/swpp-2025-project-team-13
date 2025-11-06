@@ -39,6 +39,7 @@ export type AppStackParamList = {
   SignUp: undefined
   Onboarding: undefined
   Foodigram: undefined
+  Scrap: undefined
   Profile: undefined
   // 🔥 Your screens go here
   // IGNITE_GENERATOR_ANCHOR_APP_STACK_PARAM_LIST
@@ -108,6 +109,11 @@ const AppStack = observer(function AppStack() {
           <Stack.Screen 
             name="Foodigram" 
             component={Screens.FoodigramScreen} 
+            options={{ animation: 'none' }}
+          />
+          <Stack.Screen 
+            name="Scrap" 
+            component={Screens.ScrapScreen} 
             options={{ animation: 'none' }}
           />
           <Stack.Screen 

@@ -348,6 +348,19 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           style={$tabButton}
           onPress={() => {
             if (__DEV__) {
+              console.log(`Home: navigated to Scrap`)
+            }
+            navigation.navigate("Scrap")
+          }}
+        >
+          <Bookmark size={24} color={colors.palette.neutral400} strokeWidth={2} />
+          <Text style={$tabButtonText}>스크랩</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={$tabButton}
+          onPress={() => {
+            if (__DEV__) {
               console.log(`Home: navigated to Profile`)
             }
             navigation.navigate("Profile")
