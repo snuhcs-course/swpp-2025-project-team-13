@@ -126,10 +126,10 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
         <View style={$form}>
           {/* Full Name */}
           <View style={$inputWrapper}>
-            <Text style={$label}>닉네임</Text>
+            <Text style={$label}>아이디</Text>
             <TextInput
               style={$input}
-              placeholder="닉네임을 입력해 주세요"
+              placeholder="아이디을 입력해 주세요"
               placeholderTextColor="#9c5749"
               value={fullName}
               onChangeText={setFullName}
