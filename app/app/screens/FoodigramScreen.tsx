@@ -240,7 +240,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
                     {currentMenu.menu_name}
                   </Text>
                   <Text style={$menuPriceLarge} numberOfLines={1}>
-                    ₩{currentMenu.price?.toLocaleString()}
+                    {currentMenu.price ? `₩${currentMenu.price.toLocaleString()}` : "가격 정보 없음"}
                   </Text>
                   <Text style={$menuRatingLarge} numberOfLines={1}>
                     ⭐ {currentMenu.rating} (리뷰 {currentMenu.review_count}개)

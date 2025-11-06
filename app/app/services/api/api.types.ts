@@ -41,7 +41,7 @@ export interface MenuRecommendationItem {
   id: string | number  // ChromaDB ID can be a string
   menu_name: string
   place_name: string
-  price: number
+  price: number | null
   category: string
   location: string
   rating: number

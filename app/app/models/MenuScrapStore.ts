@@ -7,7 +7,7 @@ export const MenuScrapModel = types.model("MenuScrap").props({
   id: types.identifier,
   menu_name: types.string,
   place_name: types.string,
-  price: types.number,
+  price: types.maybeNull(types.number),
   category: types.string,
   location: types.string,
   rating: types.number,
@@ -30,7 +30,7 @@ export const MenuScrapStoreModel = types
       id: number | string
       menu_name: string
       place_name: string
-      price: number
+      price: number | null
       category: string
       location: string
       rating: number
@@ -61,7 +61,7 @@ export const MenuScrapStoreModel = types
       id: number | string
       menu_name: string
       place_name: string
-      price: number
+      price: number | null
       category: string
       location: string
       rating: number
