@@ -1,4 +1,4 @@
-import { Bookmark, Home, User } from "lucide-react-native"
+import { Bookmark, Home, User, X } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
 import React from "react"
 import {
@@ -46,7 +46,7 @@ export const ScrapScreen: React.FC<ScrapScreenProps> = observer(function ScrapSc
           ) : (
             <View style={$photoGrid}>
               {scrappedMenus.map((menu) => (
-                <TouchableOpacity
+                <View
                   key={menu.id}
                   style={[$photoCard, { width: imageSize, height: imageSize }]}
                 >
@@ -61,6 +61,14 @@ export const ScrapScreen: React.FC<ScrapScreenProps> = observer(function ScrapSc
                       <Text style={$placeholderText}>이미지 없음</Text>
                     </View>
                   )}
+                  <TouchableOpacity
+                    style={$removeButton}
+                    onPress={() => menuScrapStore.removeScrappedMenu(menu.id)}
+                  >
+                    <View style={$removeButtonBackground}>
+                      <X size={12} color="#FFFFFF" strokeWidth={2.5} />
+                    </View>
+                  </TouchableOpacity>
                   <View style={$menuOverlay}>
                     <Text style={$menuOverlayTitle} numberOfLines={1}>
                       {menu.menu_name}
@@ -72,7 +80,7 @@ export const ScrapScreen: React.FC<ScrapScreenProps> = observer(function ScrapSc
                       ₩{menu.price?.toLocaleString() || '0'}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </View>
               ))}
             </View>
           )}
@@ -212,6 +220,22 @@ const $menuOverlayPrice: TextStyle = {
   color: "#fff",
   fontSize: 11,
   fontWeight: "600",
+}
+
+const $removeButton: ViewStyle = {
+  position: "absolute",
+  top: spacing.xs,
+  right: spacing.xs,
+  zIndex: 10,
+}
+
+const $removeButtonBackground: ViewStyle = {
+  width: 20,
+  height: 20,
+  borderRadius: 14,
+  backgroundColor: "rgba(0,0,0,0.3)",
+  alignItems: "center",
+  justifyContent: "center",
 }
 
 const $emptyState: ViewStyle = {
