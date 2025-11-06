@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient"
 import { Bookmark, Home, User } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import {
   ActivityIndicator,
   Dimensions,
@@ -10,7 +10,9 @@ import {
   RefreshControl,
   ScrollView,
   TextStyle, TouchableOpacity,
-  View, ViewStyle
+  View, ViewStyle,
+  NativeSyntheticEvent,
+  NativeScrollEvent
 } from "react-native"
 import { Text } from "../components"
 import { useStores } from "../models"
@@ -31,15 +33,20 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [isImageLoading, setIsImageLoading] = useState<{ [key: string]: boolean }>({})
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMoreData, setHasMoreData] = useState(true)
+  const [currentMaxResults, setCurrentMaxResults] = useState(10)
+  const scrollViewRef = useRef<ScrollView>(null)
 
   // Fetch recommendations function
-  const fetchRecommendations = async () => {
+  const fetchRecommendations = async (append = false) => {
     try {
       // User location info (should be obtained from GPS or user settings)
       const userLocation: [number, number] = [126.9619864, 37.477136] // Seoul Gangnam Station coordinates
 
+      const maxResults = append ? currentMaxResults + 10 : 10
       const recommendations = await api.getMenuRecommendations(userLocation, {
-        maxResults: 10,
+        maxResults,
       })
 
       if (recommendations && recommendations.success && recommendations.results) {
@@ -52,11 +59,38 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
             seenPlaceIds.add(menu.place_name)
           }
         }
-        setRecommendedMenus(uniquePlaceMenus)
+        
+        if (append) {
+          // 추가 로드: 기존 메뉴 ID를 추적하여 중복 제거
+          const existingIds = new Set(recommendedMenus.map(m => m.id))
+          const newMenus = uniquePlaceMenus.filter(menu => !existingIds.has(menu.id))
+          
+          if (newMenus.length === 0) {
+            setHasMoreData(false)
+          } else {
+            setRecommendedMenus(prev => [...prev, ...newMenus])
+            setCurrentMaxResults(maxResults)
+          }
+        } else {
+          // 초기 로드
+          setRecommendedMenus(uniquePlaceMenus)
+          setCurrentMaxResults(10)
+          setHasMoreData(uniquePlaceMenus.length >= 10)
+        }
       }
     } catch (error) {
       console.error("Failed to fetch recommended menus:", error)
+      setHasMoreData(false)
     }
+  }
+
+  // Load more recommendations
+  const loadMoreRecommendations = async () => {
+    if (isLoadingMore || !hasMoreData) return
+    
+    setIsLoadingMore(true)
+    await fetchRecommendations(true)
+    setIsLoadingMore(false)
   }
 
   // Automatically fetch recommended menus on screen load
@@ -73,8 +107,20 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   // Handle pull-to-refresh
   const onRefresh = async () => {
     setRefreshing(true)
-    await fetchRecommendations()
+    setHasMoreData(true)
+    await fetchRecommendations(false)
     setRefreshing(false)
+  }
+
+  // Handle scroll event for infinite scroll
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent
+    const paddingBottom = 100 // 하단 padding 크기
+    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingBottom
+
+    if (isCloseToBottom && hasMoreData && !isLoadingMore && !isLoadingRecommendations) {
+      loadMoreRecommendations()
+    }
   }
 
   // Preload images
@@ -129,6 +175,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     <View style={$container}>
       {/* Main Full Screen Content */}
       <ScrollView
+        ref={scrollViewRef}
         style={$fullScreenContainer}
         contentContainerStyle={$scrollContentContainer}
         refreshControl={
@@ -142,6 +189,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         }
         bounces={true}
         scrollEventThrottle={16}
+        onScroll={handleScroll}
       >
         {isLoadingRecommendations ? (
           // Loading state
@@ -150,86 +198,98 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           </View>
         ) : recommendedMenus.length > 0 ? (
           // Vertical list of menu items
-          recommendedMenus.map((menu, index) => (
-            <ImageBackground
-              key={menu.id || index}
-              source={{
-                uri:
-                  menu.image_urls && menu.image_urls.length > 0
-                    ? menu.image_urls[0]
-                    : undefined,
-              }}
-              style={[$backgroundImage, { height: screenHeight }]}
-              resizeMode="cover"
-              onLoadStart={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: true }))}
-              onLoadEnd={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
-              onError={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
-            >
-              {/* Image Loading Indicator */}
-              {isImageLoading[menu.id] && (
-                <View style={$imageLoadingContainer}>
-                  <ActivityIndicator size="large" color="#fff" />
+          <>
+            {recommendedMenus.map((menu, index) => (
+              <ImageBackground
+                key={menu.id || index}
+                source={{
+                  uri:
+                    menu.image_urls && menu.image_urls.length > 0
+                      ? menu.image_urls[0]
+                      : undefined,
+                }}
+                style={[$backgroundImage, { height: screenHeight }]}
+                resizeMode="cover"
+                onLoadStart={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: true }))}
+                onLoadEnd={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
+                onError={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
+              >
+                {/* Image Loading Indicator */}
+                {isImageLoading[menu.id] && (
+                  <View style={$imageLoadingContainer}>
+                    <ActivityIndicator size="large" color="#fff" />
+                  </View>
+                )}
+
+                {/* Top Gradient Overlay */}
+                <LinearGradient
+                  colors={["rgba(0,0,0,0.6)", "transparent"]}
+                  style={$gradientOverlayTop}
+                />
+
+                {/* Bottom Gradient Overlay */}
+                <LinearGradient
+                  colors={["transparent", "rgba(0,0,0,0.8)"]}
+                  style={$gradientOverlay}
+                />
+
+                {/* Top Header */}
+                <View style={$topHeader}>
+                  
+                </View>
+
+                {/* Bottom Info */}
+                <View style={$bottomInfo}>
+                  <View style={$restaurantNameContainer}>
+                  <Text style={$restaurantName} numberOfLines={2}>
+                    {menu.place_name}
+                  </Text>
+                  <TouchableOpacity
+                    style={$headerButton}
+                    onPress={() => toggleBookmark(menu)}
+                  >
+                    <Bookmark
+                      size={24}
+                      color="#fff"
+                      fill={menuScrapStore.isScrapped(menu.id) ? "#fff" : "transparent"}
+                    />
+                  </TouchableOpacity>
+                  </View>
+
+                  
+                  <Text style={$restaurantDetails} numberOfLines={1}>
+                    {menu.category} • {menu.location}
+                  </Text>
+                  <View style={$menuDetails}>
+                    <Text style={$menuNameLarge} numberOfLines={1}>
+                      {menu.menu_name}
+                    </Text>
+                    <Text style={$menuPriceLarge} numberOfLines={1}>
+                      {menu.price ? `₩${menu.price.toLocaleString()}` : "가격 정보 없음"}
+                    </Text>
+                    <Text style={$menuRatingLarge} numberOfLines={1}>
+                      ⭐ {menu.rating} (리뷰 {menu.review_count}개)
+                    </Text>
+                    {menu.reason && (
+                      <Text style={$menuReasonLarge} numberOfLines={2}>
+                        {menu.category} 카테고리
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </ImageBackground>
+            ))}
+            
+            {/* Bottom padding with loading spinner */}
+            <View style={$bottomPaddingContainer}>
+              {isLoadingMore && (
+                <View style={$loadingMoreContainer}>
+                  <ActivityIndicator size="large" color="#f66c51" />
+                  <Text style={$loadingMoreText}>더 많은 맛집을 찾고 있어요...</Text>
                 </View>
               )}
-
-              {/* Top Gradient Overlay */}
-              <LinearGradient
-                colors={["rgba(0,0,0,0.6)", "transparent"]}
-                style={$gradientOverlayTop}
-              />
-
-              {/* Bottom Gradient Overlay */}
-              <LinearGradient
-                colors={["transparent", "rgba(0,0,0,0.8)"]}
-                style={$gradientOverlay}
-              />
-
-              {/* Top Header */}
-              <View style={$topHeader}>
-                
-              </View>
-
-              {/* Bottom Info */}
-              <View style={$bottomInfo}>
-                <View style={$restaurantNameContainer}>
-                <Text style={$restaurantName} numberOfLines={2}>
-                  {menu.place_name}
-                </Text>
-                <TouchableOpacity
-                  style={$headerButton}
-                  onPress={() => toggleBookmark(menu)}
-                >
-                  <Bookmark
-                    size={24}
-                    color="#fff"
-                    fill={menuScrapStore.isScrapped(menu.id) ? "#fff" : "transparent"}
-                  />
-                </TouchableOpacity>
-                </View>
-
-                
-                <Text style={$restaurantDetails} numberOfLines={1}>
-                  {menu.category} • {menu.location}
-                </Text>
-                <View style={$menuDetails}>
-                  <Text style={$menuNameLarge} numberOfLines={1}>
-                    {menu.menu_name}
-                  </Text>
-                  <Text style={$menuPriceLarge} numberOfLines={1}>
-                    {menu.price ? `₩${menu.price.toLocaleString()}` : "가격 정보 없음"}
-                  </Text>
-                  <Text style={$menuRatingLarge} numberOfLines={1}>
-                    ⭐ {menu.rating} (리뷰 {menu.review_count}개)
-                  </Text>
-                  {menu.reason && (
-                    <Text style={$menuReasonLarge} numberOfLines={2}>
-                      {menu.category} 카테고리
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </ImageBackground>
-          ))
+            </View>
+          </>
         ) : (
           // Error state
           <View style={[$emptyState, { height: screenHeight }]}>
@@ -432,6 +492,27 @@ const $emptySubtext: TextStyle = {
   fontSize: 14,
   color: colors.palette.neutral400,
   textAlign: "center",
+}
+
+const $bottomPaddingContainer: ViewStyle = {
+  height: 100,
+  width: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+  paddingVertical: spacing.lg,
+  marginBottom: 80
+}
+
+const $loadingMoreContainer: ViewStyle = {
+  justifyContent: "center",
+  alignItems: "center",
+  gap: spacing.sm,
+}
+
+const $loadingMoreText: TextStyle = {
+  fontSize: 14,
+  color: colors.palette.neutral400,
+  marginTop: spacing.xs,
 }
 
 const $bottomTabs: ViewStyle = {
