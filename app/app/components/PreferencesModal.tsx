@@ -29,15 +29,38 @@ interface UserPreferences {
 }
 
 const ALLERGIES = [
-  "eggs", "soy", "sesame", "fish", "shellfish", "wheat", "milk", "peanuts", "tree nuts"
+  { id: "eggs", label: "달걀" },
+  { id: "soy", label: "대두" },
+  { id: "sesame", label: "참깨" },
+  { id: "fish", label: "생선" },
+  { id: "shellfish", label: "조개류" },
+  { id: "wheat", label: "밀" },
+  { id: "milk", label: "우유" },
+  { id: "peanuts", label: "땅콩" },
+  { id: "tree nuts", label: "견과류" },
 ]
 
 const INGREDIENTS = [
-  "onion", "garlic", "ginger", "cilantro", "mushroom", "tomato", "cheese", "meat", "seafood"
+  { id: "onion", label: "양파" },
+  { id: "garlic", label: "마늘" },
+  { id: "ginger", label: "생강" },
+  { id: "cilantro", label: "고수" },
+  { id: "mushroom", label: "버섯" },
+  { id: "tomato", label: "토마토" },
+  { id: "cheese", label: "치즈" },
+  { id: "meat", label: "고기" },
+  { id: "seafood", label: "해산물" },
 ]
 
 const CUISINES = [
-  "korean", "japanese", "chinese", "western", "thai", "italian", "mexican", "indian"
+  { id: "korean", label: "한식" },
+  { id: "japanese", label: "일식" },
+  { id: "chinese", label: "중식" },
+  { id: "western", label: "양식" },
+  { id: "thai", label: "태국" },
+  { id: "italian", label: "이탈리안" },
+  { id: "mexican", label: "멕시칸" },
+  { id: "indian", label: "인도" },
 ]
 
 export const PreferencesModal: React.FC<PreferencesModalProps> = ({
@@ -91,10 +114,6 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
     }
   }
 
-  const updatePreference = (key: keyof UserPreferences, value: any) => {
-    setPreferences(prev => ({ ...prev, [key]: value }))
-  }
-
   const toggleArrayItem = (key: 'allergies' | 'disliked_ingredients' | 'favorite_cuisines', item: string) => {
     setPreferences(prev => ({
       ...prev,
@@ -104,78 +123,25 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
     }))
   }
 
-  const renderTastePreferences = () => (
-    <View style={$section}>
-      <Text style={$sectionTitle}>Taste Preferences</Text>
-      
-      <View style={$sliderContainer}>
-        <Text style={$sliderLabel}>Spicy Level: {preferences.spicy_level}</Text>
-        <View style={$sliderTrack}>
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
-            <TouchableOpacity
-              key={value}
-              style={[
-                $sliderDot,
-                value <= preferences.spicy_level ? $sliderDotActive : $sliderDotInactive
-              ]}
-              onPress={() => updatePreference('spicy_level', value)}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={$sliderContainer}>
-        <Text style={$sliderLabel}>Sweet Level: {preferences.sweet_level}</Text>
-        <View style={$sliderTrack}>
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
-            <TouchableOpacity
-              key={value}
-              style={[
-                $sliderDot,
-                value <= preferences.sweet_level ? $sliderDotActive : $sliderDotInactive
-              ]}
-              onPress={() => updatePreference('sweet_level', value)}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={$sliderContainer}>
-        <Text style={$sliderLabel}>Salty Level: {preferences.salty_level}</Text>
-        <View style={$sliderTrack}>
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
-            <TouchableOpacity
-              key={value}
-              style={[
-                $sliderDot,
-                value <= preferences.salty_level ? $sliderDotActive : $sliderDotInactive
-              ]}
-              onPress={() => updatePreference('salty_level', value)}
-            />
-          ))}
-        </View>
-      </View>
-    </View>
-  )
 
   const renderAllergies = () => (
     <View style={$section}>
-      <Text style={$sectionTitle}>Allergies</Text>
+      <Text style={$sectionTitle}>알러지</Text>
       <View style={$tagContainer}>
         {ALLERGIES.map((allergy) => (
           <TouchableOpacity
-            key={allergy}
+            key={allergy.id}
             style={[
               $tag,
-              preferences.allergies.includes(allergy) ? $tagSelected : $tagUnselected
+              preferences.allergies.includes(allergy.id) ? $tagSelected : $tagUnselected
             ]}
-            onPress={() => toggleArrayItem('allergies', allergy)}
+            onPress={() => toggleArrayItem('allergies', allergy.id)}
           >
             <Text style={[
               $tagText,
-              preferences.allergies.includes(allergy) ? $tagTextSelected : $tagTextUnselected
+              preferences.allergies.includes(allergy.id) ? $tagTextSelected : $tagTextUnselected
             ]}>
-              {allergy}
+              {allergy.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -185,22 +151,22 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
 
   const renderDislikedIngredients = () => (
     <View style={$section}>
-      <Text style={$sectionTitle}>Disliked Ingredients</Text>
+      <Text style={$sectionTitle}>싫어하는 재료</Text>
       <View style={$tagContainer}>
         {INGREDIENTS.map((ingredient) => (
           <TouchableOpacity
-            key={ingredient}
+            key={ingredient.id}
             style={[
               $tag,
-              preferences.disliked_ingredients.includes(ingredient) ? $tagSelected : $tagUnselected
+              preferences.disliked_ingredients.includes(ingredient.id) ? $tagSelected : $tagUnselected
             ]}
-            onPress={() => toggleArrayItem('disliked_ingredients', ingredient)}
+            onPress={() => toggleArrayItem('disliked_ingredients', ingredient.id)}
           >
             <Text style={[
               $tagText,
-              preferences.disliked_ingredients.includes(ingredient) ? $tagTextSelected : $tagTextUnselected
+              preferences.disliked_ingredients.includes(ingredient.id) ? $tagTextSelected : $tagTextUnselected
             ]}>
-              {ingredient}
+              {ingredient.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -210,22 +176,22 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
 
   const renderFavoriteCuisines = () => (
     <View style={$section}>
-      <Text style={$sectionTitle}>Favorite Cuisines</Text>
+      <Text style={$sectionTitle}>좋아하는 요리</Text>
       <View style={$tagContainer}>
         {CUISINES.map((cuisine) => (
           <TouchableOpacity
-            key={cuisine}
+            key={cuisine.id}
             style={[
               $tag,
-              preferences.favorite_cuisines.includes(cuisine) ? $tagSelected : $tagUnselected
+              preferences.favorite_cuisines.includes(cuisine.id) ? $tagSelected : $tagUnselected
             ]}
-            onPress={() => toggleArrayItem('favorite_cuisines', cuisine)}
+            onPress={() => toggleArrayItem('favorite_cuisines', cuisine.id)}
           >
             <Text style={[
               $tagText,
-              preferences.favorite_cuisines.includes(cuisine) ? $tagTextSelected : $tagTextUnselected
+              preferences.favorite_cuisines.includes(cuisine.id) ? $tagTextSelected : $tagTextUnselected
             ]}>
-              {cuisine}
+              {cuisine.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -245,7 +211,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
           <View style={$modalContent}>
             {/* Header */}
             <View style={$header}>
-              <Text style={$headerTitle}>Preferences</Text>
+              <Text style={$headerTitle}>취향 설정</Text>
               <TouchableOpacity onPress={onClose} style={$closeButton}>
                 <X size={24} color={colors.palette.neutral700} />
               </TouchableOpacity>
@@ -254,21 +220,20 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
             {loading ? (
               <View style={$loadingContainer}>
                 <ActivityIndicator size="large" color={colors.palette.primary500} />
-                <Text style={$loadingText}>Loading preferences...</Text>
+                <Text style={$loadingText}>설정 불러오는 중...</Text>
               </View>
             ) : (
               <ScrollView style={$scrollContent} showsVerticalScrollIndicator={false}>
-                {renderTastePreferences()}
+                {renderFavoriteCuisines()}
                 {renderAllergies()}
                 {renderDislikedIngredients()}
-                {renderFavoriteCuisines()}
               </ScrollView>
             )}
 
             {/* Footer */}
             <View style={$footer}>
               <Button
-                text="Save"
+                text="저장"
                 onPress={savePreferences}
                 disabled={saving}
                 style={$saveButton}
@@ -316,7 +281,6 @@ const $headerTitle: TextStyle = {
 }
 
 const $closeButton: ViewStyle = {
-  padding: spacing.xs,
 }
 
 const $loadingContainer: ViewStyle = {
@@ -344,40 +308,6 @@ const $sectionTitle: TextStyle = {
   fontWeight: "600",
   color: colors.text,
   marginBottom: spacing.md,
-}
-
-const $sliderContainer: ViewStyle = {
-  marginBottom: spacing.lg,
-}
-
-const $sliderLabel: TextStyle = {
-  fontSize: 16,
-  fontWeight: "500",
-  color: colors.text,
-  marginBottom: spacing.sm,
-}
-
-const $sliderTrack: ViewStyle = {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-}
-
-const $sliderDot: ViewStyle = {
-  width: 16,
-  height: 16,
-  borderRadius: 8,
-  borderWidth: 2,
-}
-
-const $sliderDotActive: ViewStyle = {
-  backgroundColor: colors.palette.primary500,
-  borderColor: colors.palette.primary500,
-}
-
-const $sliderDotInactive: ViewStyle = {
-  backgroundColor: colors.background,
-  borderColor: colors.palette.neutral300,
 }
 
 const $tagContainer: ViewStyle = {
