@@ -24,6 +24,7 @@ interface UserPreferences {
   spicy_level: number
   sweet_level: number
   salty_level: number
+  exploration_preference: number
   allergies: string[]
   disliked_ingredients: string[]
   favorite_cuisines: string[]
@@ -54,14 +55,18 @@ const INGREDIENTS = [
 ]
 
 const CUISINES = [
-  { id: "korean", label: "한식" },
-  { id: "japanese", label: "일식" },
-  { id: "chinese", label: "중식" },
-  { id: "western", label: "양식" },
-  { id: "thai", label: "태국" },
   { id: "italian", label: "이탈리안" },
   { id: "mexican", label: "멕시칸" },
+  { id: "chinese", label: "중식" },
+  { id: "japanese", label: "일식" },
   { id: "indian", label: "인도" },
+  { id: "american", label: "아메리칸" },
+  { id: "thai", label: "태국" },
+  { id: "mediterranean", label: "지중해" },
+  { id: "french", label: "프렌치" },
+  { id: "vietnamese", label: "베트남" },
+  { id: "spanish", label: "스페인" },
+  { id: "korean", label: "한식" },
 ]
 
 export const PreferencesModal: React.FC<PreferencesModalProps> = ({
@@ -73,6 +78,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
     spicy_level: 5,
     sweet_level: 5,
     salty_level: 5,
+    exploration_preference: 5,
     allergies: [],
     disliked_ingredients: [],
     favorite_cuisines: []
@@ -123,6 +129,10 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
         ? prev[key].filter(i => i !== item)
         : [...prev[key], item]
     }))
+  }
+
+  const updatePreference = (key: keyof UserPreferences, value: number) => {
+    setPreferences(prev => ({ ...prev, [key]: value }))
   }
 
 
@@ -201,6 +211,46 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
     </View>
   )
 
+  const renderExplorationPreference = () => {
+    // 서버에서 받은 값: 10 = adventurous (좋아해요), 0 = not adventurous (먹던 거만 먹어요)
+    // UI 표시용 값: 0 = 좋아해요, 1 = 먹던 거만 먹어요
+    const displayValue = preferences.exploration_preference >= 5 ? 0 : 1
+    const explorationOptions = [
+      { label: "좋아해요", value: 0 },
+      { label: "먹던 거만 먹어요", value: 1 },
+    ]
+
+    return (
+      <View style={$section}>
+        <Text style={$sectionTitle}>새로운 음식을 좋아하시나요?</Text>
+        <View style={$tagContainer}>
+          {explorationOptions.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                $tag,
+                displayValue === option.value ? $tagSelected : $tagUnselected
+              ]}
+              onPress={() => {
+                // UI 값(0 또는 1)을 서버 값(10 또는 0)으로 변환
+                // 0(좋아해요) -> 10, 1(먹던 거만 먹어요) -> 0
+                const serverValue = option.value === 0 ? 10 : 0
+                updatePreference('exploration_preference', serverValue)
+              }}
+            >
+              <Text style={[
+                $tagText,
+                displayValue === option.value ? $tagTextSelected : $tagTextUnselected
+              ]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    )
+  }
+
   return (
     <Modal
       visible={visible}
@@ -226,6 +276,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
               </View>
             ) : (
               <ScrollView style={$scrollContent} showsVerticalScrollIndicator={false}>
+                {renderExplorationPreference()}
                 {renderFavoriteCuisines()}
                 {renderAllergies()}
                 {renderDislikedIngredients()}

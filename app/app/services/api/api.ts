@@ -225,6 +225,7 @@ export class Api {
     spicy_level?: number
     sweet_level?: number
     salty_level?: number
+    exploration_preference?: number
     allergies?: string[]
     disliked_ingredients?: string[]
     favorite_cuisines?: string[]
@@ -243,6 +244,7 @@ export class Api {
     spicy_level?: number
     sweet_level?: number
     salty_level?: number
+    exploration_preference?: number
     allergies?: string[]
     disliked_ingredients?: string[]
     favorite_cuisines?: string[]
