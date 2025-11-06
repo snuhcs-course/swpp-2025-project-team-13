@@ -165,7 +165,7 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
         spicy_level: Math.round(preferences.spicy_level * 2.5),
         sweet_level: Math.round(preferences.sweet_level * 2.5),
         salty_level: Math.round(preferences.salty_level * 5), // if we map 0~2 to 0/5/10
-        exploration_preference: preferences.exploration_preference === 0 ? 10 : 0
+        exploration_preference: preferences.exploration_preference === 0 ? 5 : 0
       }
       const response = await api.savePreferences(apiPreferences)
       if (response.ok) {

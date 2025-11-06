@@ -78,7 +78,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
     spicy_level: 5,
     sweet_level: 5,
     salty_level: 5,
-    exploration_preference: 5,
+    exploration_preference: 2.5,
     allergies: [],
     disliked_ingredients: [],
     favorite_cuisines: []
@@ -212,9 +212,9 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
   )
 
   const renderExplorationPreference = () => {
-    // 서버에서 받은 값: 10 = adventurous (좋아해요), 0 = not adventurous (먹던 거만 먹어요)
+    // 서버에서 받은 값: 5 = adventurous (좋아해요), 0 = not adventurous (먹던 거만 먹어요)
     // UI 표시용 값: 0 = 좋아해요, 1 = 먹던 거만 먹어요
-    const displayValue = preferences.exploration_preference >= 5 ? 0 : 1
+    const displayValue = preferences.exploration_preference >= 2.5 ? 0 : 1
     const explorationOptions = [
       { label: "좋아해요", value: 0 },
       { label: "먹던 거만 먹어요", value: 1 },
@@ -232,9 +232,9 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
                 displayValue === option.value ? $tagSelected : $tagUnselected
               ]}
               onPress={() => {
-                // UI 값(0 또는 1)을 서버 값(10 또는 0)으로 변환
-                // 0(좋아해요) -> 10, 1(먹던 거만 먹어요) -> 0
-                const serverValue = option.value === 0 ? 10 : 0
+                // UI 값(0 또는 1)을 서버 값(5 또는 0)으로 변환
+                // 0(좋아해요) -> 5, 1(먹던 거만 먹어요) -> 0
+                const serverValue = option.value === 0 ? 5 : 0
                 updatePreference('exploration_preference', serverValue)
               }}
             >
