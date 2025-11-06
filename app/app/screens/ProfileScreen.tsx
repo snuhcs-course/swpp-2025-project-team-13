@@ -3,13 +3,14 @@ import { api } from "app/services/api"
 import { getImage as getImageName } from "app/utils/imagenameFromAsseturi"
 import * as storage from "app/utils/storage"
 import { Asset } from "expo-media-library"
-import { Bookmark, Home, Plus, User } from "lucide-react-native"
+import { Bookmark, Home, Image as ImageIcon, LogOut, Settings, User, X } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
 import React, { useEffect, useState } from "react"
 import {
   Dimensions,
   Image,
   ImageStyle,
+  Modal,
   ScrollView,
   TextStyle,
   TouchableOpacity,
@@ -32,6 +33,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<number | null>(null)
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isPreferencesModalVisible, setIsPreferencesModalVisible] = useState(false)
+  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false)
 
   const [userImages, setUserImages] = useState<Array<{ id: string, type: string, image: any, name: string }>>([
     // { id: 'user1', type: 'user', image: require("../../assets/images/restaurant1.jpg"), name: 'My Food Photo 1' },
@@ -214,7 +216,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
         </TouchableOpacity>
       </View>
 
-      {/* Floating Add Button */}
+      {/* Floating Settings Button */}
+      <TouchableOpacity
+        testID="settings-floating-button"
+        style={$floatingSettingsButton}
+        onPress={() => setIsSettingsModalVisible(true)}
+      >
+        <Settings size={28} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* Floating Gallery Button */}
       <TouchableOpacity
         testID="refresh-button"
         style={$floatingButton}
@@ -229,7 +240,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
           })
         }}
       >
-        <Plus size={32} color="#FFFFFF" />
+        <ImageIcon size={28} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* Restaurant Detail Modal */}
@@ -246,8 +257,46 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
       <PreferencesModal
         visible={isPreferencesModalVisible}
         onClose={() => setIsPreferencesModalVisible(false)}
-        onLogout={logout}
       />
+
+      {/* Settings Modal */}
+      <Modal
+        visible={isSettingsModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsSettingsModalVisible(false)}
+      >
+        <View style={$settingsModalBackdrop}>
+          <View style={$settingsModalContainer}>
+            <View style={$settingsModalContent}>
+              {/* Header */}
+              <View style={$settingsModalHeader}>
+                <Text style={$settingsModalTitle}>설정</Text>
+                <TouchableOpacity 
+                  onPress={() => setIsSettingsModalVisible(false)} 
+                  style={$settingsCloseButton}
+                >
+                  <X size={24} color={colors.palette.neutral700} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Content */}
+              <View style={$settingsModalBody}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsSettingsModalVisible(false)
+                    logout()
+                  }}
+                  style={$settingsLogoutButton}
+                >
+                  <LogOut size={20} color={colors.error} />
+                  <Text style={$settingsLogoutText}>로그아웃</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 })
@@ -391,4 +440,99 @@ const $floatingButton: ViewStyle = {
   shadowOpacity: 0.3,
   shadowRadius: 8,
   elevation: 8,
+}
+
+const $floatingSettingsButton: ViewStyle = {
+  position: "absolute",
+  bottom: spacing.xl + 80 + 80, // Above gallery button
+  right: spacing.xl,
+  width: 64,
+  height: 64,
+  borderRadius: 32,
+  backgroundColor: colors.palette.primary500,
+  alignItems: "center",
+  justifyContent: "center",
+  shadowColor: "#000",
+  shadowOffset: {
+    width: 0,
+    height: 4,
+  },
+  shadowOpacity: 0.3,
+  shadowRadius: 8,
+  elevation: 8,
+}
+
+const $settingsModalBackdrop: ViewStyle = {
+  flex: 1,
+  backgroundColor: "rgba(0, 0, 0, 0.6)",
+  justifyContent: "center",
+  alignItems: "center",
+  padding: spacing.lg,
+}
+
+const $settingsModalContainer: ViewStyle = {
+  width: "100%",
+  maxWidth: 400,
+}
+
+const $settingsModalContent: ViewStyle = {
+  backgroundColor: colors.background,
+  borderRadius: 12,
+  overflow: "hidden",
+}
+
+const $settingsModalHeader: ViewStyle = {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: spacing.lg,
+  borderBottomWidth: 1,
+  borderBottomColor: colors.palette.neutral200,
+}
+
+const $settingsModalTitle: TextStyle = {
+  fontSize: 20,
+  fontWeight: "bold",
+  color: colors.text,
+}
+
+const $settingsCloseButton: ViewStyle = {
+  padding: spacing.xs,
+}
+
+const $settingsModalBody: ViewStyle = {
+  padding: spacing.md,
+}
+
+const $settingsMenuItem: ViewStyle = {
+  paddingVertical: spacing.md,
+  paddingHorizontal: spacing.lg,
+  borderRadius: 8,
+  marginBottom: spacing.sm,
+}
+
+const $settingsMenuItemText: TextStyle = {
+  fontSize: 16,
+  color: colors.text,
+  fontWeight: "500",
+}
+
+const $settingsLogoutButton: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  paddingVertical: spacing.md,
+  paddingHorizontal: spacing.lg,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  backgroundColor: colors.background,
+  gap: spacing.sm,
+  marginTop: spacing.md,
+}
+
+const $settingsLogoutText: TextStyle = {
+  fontSize: 16,
+  fontWeight: "600",
+  color: colors.error,
 }
