@@ -16,7 +16,7 @@ export function useImageClassifier() {
 
       const result = await readyClassifier.classifyImage(imageUri);
       console.log(result);
-      return result[0].text === "food";
+      return result.length >=1 && result[0].text === "food";
     } catch (err) {
       console.error("Classification failed", err);
       return null;
