@@ -1,9 +1,11 @@
-import { useAlbumScanner } from "app/services/albums/useAlbumScanner"
+// 히스토리 피처 관련 import 주석처리
+// import { useAlbumScanner } from "app/services/albums/useAlbumScanner"
 import { api } from "app/services/api"
-import { getImage as getImageName } from "app/utils/imagenameFromAsseturi"
+// import { getImage as getImageName } from "app/utils/imagenameFromAsseturi"
 import * as storage from "app/utils/storage"
-import { Asset } from "expo-media-library"
-import { Home, Plus, User } from "lucide-react-native"
+// import { Asset } from "expo-media-library"
+import { Home, User } from "lucide-react-native"
+// import { Plus } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
 import React, { useEffect, useState } from "react"
 import {
@@ -24,20 +26,24 @@ import { colors, spacing } from "../theme"
 interface ProfileScreenProps extends AppStackScreenProps<"Profile"> { }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function ProfileScreen({ navigation }) {
-  const { foodHistoryStore, menuScrapStore } = useStores()
-  const { scanAlbums } = useAlbumScanner();
+  // 히스토리 피처 관련 주석처리
+  // const { foodHistoryStore, menuScrapStore } = useStores()
+  const { menuScrapStore } = useStores()
+  // const { scanAlbums } = useAlbumScanner();
   const screenWidth = Dimensions.get('window').width
   const imageSize = (screenWidth - spacing.lg * 2 - spacing.sm) / 2 // 2 columns with padding
   const [userName, setUserName] = useState("")
-  const [activeTab, setActiveTab] = useState<'photos' | 'restaurants'>('photos')
+  // 히스토리 피처 관련 주석처리
+  // const [activeTab, setActiveTab] = useState<'photos' | 'restaurants'>('photos')
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<number | null>(null)
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isPreferencesModalVisible, setIsPreferencesModalVisible] = useState(false)
 
-  const [userImages, setUserImages] = useState<Array<{ id: string, type: string, image: any, name: string }>>([
-    // { id: 'user1', type: 'user', image: require("../../assets/images/restaurant1.jpg"), name: 'My Food Photo 1' },
-    // { id: 'user2', type: 'user', image: require("../../assets/images/restaurant2.jpg"), name: 'My Food Photo 2' },
-  ]);
+  // 히스토리 피처 관련 주석처리
+  // const [userImages, setUserImages] = useState<Array<{ id: string, type: string, image: any, name: string }>>([
+  //   // { id: 'user1', type: 'user', image: require("../../assets/images/restaurant1.jpg"), name: 'My Food Photo 1' },
+  //   // { id: 'user2', type: 'user', image: require("../../assets/images/restaurant2.jpg"), name: 'My Food Photo 2' },
+  // ]);
 
   useEffect(() => {
     let mounted = true
@@ -55,21 +61,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
     }
   }, [])
 
-  async function getUserPhotos() {
-    let photo_list = await api.getUserPhotos();
+  // 히스토리 피처 관련 주석처리
+  // async function getUserPhotos() {
+  //   const photo_list = await api.getUserPhotos();
 
-    let currentImages = photo_list
-      .filter(photo => photo.local_uri)
-      .map(photo => ({
-        id: photo.local_uri,
-        type: 'user',
-        image: { uri: photo.local_uri },
-        name: "User food photo"
-      }));
+  //   const currentImages = photo_list
+  //     .filter(photo => photo.local_uri)
+  //     .map(photo => ({
+  //       id: photo.local_uri,
+  //       type: 'user',
+  //       image: { uri: photo.local_uri },
+  //       name: "User food photo"
+  //     }));
 
-    setUserImages(prevImages => [...prevImages, ...currentImages]);
-  }
-  useEffect(() => { getUserPhotos(); }, []);
+  //   setUserImages(prevImages => [...prevImages, ...currentImages]);
+  // }
+  // useEffect(() => { getUserPhotos(); }, []);
 
   // Mock data for profile
   const user = {
@@ -79,19 +86,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   // Get scrapped menus from store
   const scrappedMenus = menuScrapStore.scrappedMenusList
 
-  // Get scrapped items from store
-  const scrappedFoods = foodHistoryStore.scrappedItemsList
+  // 히스토리 피처 관련 주석처리
+  // // Get scrapped items from store
+  // const scrappedFoods = foodHistoryStore.scrappedItemsList
 
-  // Convert scrapped foods to consistent format
-  const scrappedImages = scrappedFoods.map(food => ({
-    id: food.id.toString(),
-    type: 'scrapped',
-    image: { uri: food.image },
-    name: food.name
-  }))
+  // // Convert scrapped foods to consistent format
+  // const scrappedImages = scrappedFoods.map(food => ({
+  //   id: food.id.toString(),
+  //   type: 'scrapped',
+  //   image: { uri: food.image },
+  //   name: food.name
+  // }))
 
-  // Combine user images and scrapped images
-  const allPhotos = [...userImages, ...scrappedImages]
+  // // Combine user images and scrapped images
+  // const allPhotos = [...userImages, ...scrappedImages]
 
   const logout = async () => {
     try {
@@ -139,8 +147,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
           </TouchableOpacity>
         </View>
 
-        {/* Tab Navigation */}
-        <View style={$tabContainer}>
+        {/* 히스토리 피처 관련 탭 네비게이션 주석처리 */}
+        {/* <View style={$tabContainer}>
           <TouchableOpacity
             style={[$tab, activeTab === 'photos' && $tabActive]}
             onPress={() => setActiveTab('photos')}
@@ -163,10 +171,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
               찜한 메뉴
             </Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
-        {/* Content based on active tab */}
-        {activeTab === 'photos' ? (
+        {/* 히스토리 피처 관련 조건부 렌더링 제거 - 찜한 메뉴만 표시 */}
+        {/* {activeTab === 'photos' ? (
           <View style={$gridContainer}>
             {allPhotos.length === 0 ? (
               <View style={$emptyState}>
@@ -198,50 +206,50 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
               </View>
             )}
           </View>
-        ) : (
-          <View style={$gridContainer}>
-            {scrappedMenus.length === 0 ? (
-              <View style={$emptyState}>
-                <Text style={$emptyText}>찜한 메뉴가 없습니다</Text>
-                <Text style={$emptySubtext}>
-                  추천 메뉴에서 음식을 스크랩해보세요
-                </Text>
-              </View>
-            ) : (
-              <View style={$photoGrid}>
-                {scrappedMenus.map((menu) => (
-                  <TouchableOpacity
-                    key={menu.id}
-                    style={[$photoCard, { width: imageSize, height: imageSize }]}
-                  >
-                    {menu.image_url ? (
-                      <Image
-                        source={{ uri: menu.image_url }}
-                        style={$photoImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[$photoImage, $placeholderImage]}>
-                        <Text style={$placeholderText}>이미지 없음</Text>
-                      </View>
-                    )}
-                    <View style={$menuOverlay}>
-                      <Text style={$menuOverlayTitle} numberOfLines={1}>
-                        {menu.menu_name}
-                      </Text>
-                      <Text style={$menuOverlaySubtitle} numberOfLines={1}>
-                        {menu.place_name}
-                      </Text>
-                      <Text style={$menuOverlayPrice}>
-                        ₩{menu.price.toLocaleString()}
-                      </Text>
+        ) : ( */}
+        <View style={$gridContainer}>
+          {scrappedMenus.length === 0 ? (
+            <View style={$emptyState}>
+              <Text style={$emptyText}>찜한 메뉴가 없습니다</Text>
+              <Text style={$emptySubtext}>
+                추천 메뉴에서 음식을 스크랩해보세요
+              </Text>
+            </View>
+          ) : (
+            <View style={$photoGrid}>
+              {scrappedMenus.map((menu) => (
+                <TouchableOpacity
+                  key={menu.id}
+                  style={[$photoCard, { width: imageSize, height: imageSize }]}
+                >
+                  {menu.image_url ? (
+                    <Image
+                      source={{ uri: menu.image_url }}
+                      style={$photoImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[$photoImage, $placeholderImage]}>
+                      <Text style={$placeholderText}>이미지 없음</Text>
                     </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
+                  )}
+                  <View style={$menuOverlay}>
+                    <Text style={$menuOverlayTitle} numberOfLines={1}>
+                      {menu.menu_name}
+                    </Text>
+                    <Text style={$menuOverlaySubtitle} numberOfLines={1}>
+                      {menu.place_name}
+                    </Text>
+                    <Text style={$menuOverlayPrice}>
+                      {menu.price ? `₩${menu.price.toLocaleString()}` : "가격 정보 없음"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+        {/* )} */}
       </ScrollView>
 
       {/* Bottom Tabs */}
@@ -275,8 +283,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
         </TouchableOpacity>
       </View>
 
-      {/* Floating Add Button - Only show on My Photos tab */}
-      {activeTab === 'photos' && (
+      {/* 히스토리 피처 관련 Floating Add Button 주석처리 */}
+      {/* {activeTab === 'photos' && (
         <TouchableOpacity
           testID="refresh-button"
           style={$floatingButton}
@@ -293,7 +301,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
         >
           <Plus size={32} color="#FFFFFF" />
         </TouchableOpacity>
-      )}
+      )} */}
 
       {/* Restaurant Detail Modal */}
       <RestaurantDetailModal
@@ -358,34 +366,35 @@ const $editButtonText: TextStyle = {
   fontWeight: "bold",
 }
 
-const $tabContainer: ViewStyle = {
-  flexDirection: "row",
-  borderBottomWidth: 1,
-  borderBottomColor: colors.palette.neutral200,
-  marginTop: spacing.md,
-}
+// 히스토리 피처 관련 스타일 주석처리
+// const $tabContainer: ViewStyle = {
+//   flexDirection: "row",
+//   borderBottomWidth: 1,
+//   borderBottomColor: colors.palette.neutral200,
+//   marginTop: spacing.md,
+// }
 
-const $tab: ViewStyle = {
-  flex: 1,
-  paddingVertical: spacing.md,
-  alignItems: "center",
-  borderBottomWidth: 3,
-  borderBottomColor: "transparent",
-}
+// const $tab: ViewStyle = {
+//   flex: 1,
+//   paddingVertical: spacing.md,
+//   alignItems: "center",
+//   borderBottomWidth: 3,
+//   borderBottomColor: "transparent",
+// }
 
-const $tabActive: ViewStyle = {
-  borderBottomColor: colors.palette.primary500,
-}
+// const $tabActive: ViewStyle = {
+//   borderBottomColor: colors.palette.primary500,
+// }
 
-const $tabText: TextStyle = {
-  fontSize: 14,
-  fontWeight: "bold",
-  color: colors.palette.neutral500,
-}
+// const $tabText: TextStyle = {
+//   fontSize: 14,
+//   fontWeight: "bold",
+//   color: colors.palette.neutral500,
+// }
 
-const $tabTextActive: TextStyle = {
-  color: colors.palette.primary500,
-}
+// const $tabTextActive: TextStyle = {
+//   color: colors.palette.primary500,
+// }
 
 const $gridContainer: ViewStyle = {
   paddingTop: spacing.md,
@@ -505,22 +514,23 @@ const $tabButtonTextActive: TextStyle = {
   fontWeight: "600",
 }
 
-const $floatingButton: ViewStyle = {
-  position: "absolute",
-  bottom: spacing.xl + 80, // Above bottom tabs
-  right: spacing.xl,
-  width: 64,
-  height: 64,
-  borderRadius: 32,
-  backgroundColor: colors.palette.primary500,
-  alignItems: "center",
-  justifyContent: "center",
-  shadowColor: "#000",
-  shadowOffset: {
-    width: 0,
-    height: 4,
-  },
-  shadowOpacity: 0.3,
-  shadowRadius: 8,
-  elevation: 8,
-}
+// 히스토리 피처 관련 스타일 주석처리
+// const $floatingButton: ViewStyle = {
+//   position: "absolute",
+//   bottom: spacing.xl + 80, // Above bottom tabs
+//   right: spacing.xl,
+//   width: 64,
+//   height: 64,
+//   borderRadius: 32,
+//   backgroundColor: colors.palette.primary500,
+//   alignItems: "center",
+//   justifyContent: "center",
+//   shadowColor: "#000",
+//   shadowOffset: {
+//     width: 0,
+//     height: 4,
+//   },
+//   shadowOpacity: 0.3,
+//   shadowRadius: 8,
+//   elevation: 8,
+// }
