@@ -17,6 +17,7 @@ import { api } from "../services/api"
 interface PreferencesModalProps {
   visible: boolean
   onClose: () => void
+  onLogout?: () => void
 }
 
 interface UserPreferences {
@@ -66,6 +67,7 @@ const CUISINES = [
 export const PreferencesModal: React.FC<PreferencesModalProps> = ({
   visible,
   onClose,
+  onLogout,
 }) => {
   const [preferences, setPreferences] = useState<UserPreferences>({
     spicy_level: 5,
@@ -227,6 +229,15 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
                 {renderFavoriteCuisines()}
                 {renderAllergies()}
                 {renderDislikedIngredients()}
+                <TouchableOpacity
+                  onPress={() => {
+                    onClose?.()
+                    onLogout?.()
+                  }}
+                  style={$logoutButton}
+                >
+                  <Text style={$logoutButtonText}>로그아웃</Text>
+                </TouchableOpacity>
               </ScrollView>
             )}
 
@@ -354,4 +365,21 @@ const $footer: ViewStyle = {
 
 const $saveButton: ViewStyle = {
   // Button styles are handled by the Button component
+  marginBottom: spacing.md,
+}
+
+const $logoutButton: ViewStyle = {
+  paddingVertical: spacing.md,
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  backgroundColor: colors.background,
+}
+
+const $logoutButtonText: TextStyle = {
+  fontSize: 16,
+  fontWeight: "600",
+  color: colors.error,
 }

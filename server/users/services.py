@@ -57,7 +57,7 @@ def list_follow_suggestions(*, user: User, limit: int = 10):
 @transaction.atomic
 def upload_user_photo(*, user: User, photo_url: str, local_uri: str) -> str:
     photo = UserGalleryImage.objects.create(user=user, image_url=photo_url, local_uri=local_uri)
-    photo.category_tag = get_food_image_category(photo_url)[0]
+    # photo.category_tag = get_food_image_category(photo_url)[0]
     return photo
 
 def upload_user_photo_with_embedding(*, user: User, photo_url: str):

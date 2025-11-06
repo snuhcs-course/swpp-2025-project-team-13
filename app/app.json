@@ -1,15 +1,15 @@
 {
-  "name": "app",
-  "displayName": "app",
+  "name": "foodigram",
+  "displayName": "foodigram",
   "expo": {
-    "name": "app",
-    "slug": "app",
-    "scheme": "app",
+    "name": "foodigram",
+    "slug": "foodigram",
+    "scheme": "foodigram",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-all.png",
     "splash": {
-      "image": "./assets/images/splash-logo-all.png",
+      "image": "./assets/images/app-icon-all.png",
       "resizeMode": "contain",
       "backgroundColor": "#191015"
     },
@@ -21,7 +21,7 @@
       "**/*"
     ],
     "android": {
-      "icon": "./assets/images/app-icon-android-legacy.png",
+      "icon": "./assets/images/app-icon-android.png",
       "package": "com.foodigram",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app-icon-android-adaptive-foreground.png",
@@ -47,7 +47,7 @@
     "web": {
       "favicon": "./assets/images/app-icon-web-favicon.png",
       "splash": {
-        "image": "./assets/images/splash-logo-web.png",
+        "image": "./assets/images/app-icon-android.png",
         "resizeMode": "contain",
         "backgroundColor": "#191015"
       },
