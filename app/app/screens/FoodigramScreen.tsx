@@ -4,8 +4,11 @@ import { observer } from "mobx-react-lite"
 import React, { useEffect, useState } from "react"
 import {
   ActivityIndicator,
+  Dimensions,
   Image,
   ImageBackground,
+  RefreshControl,
+  ScrollView,
   TextStyle, TouchableOpacity,
   View, ViewStyle
 } from "react-native"
@@ -26,42 +29,55 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   // Recommended menu related states
   const [recommendedMenus, setRecommendedMenus] = useState<MenuRecommendationItem[]>([])
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [currentMenuIndex, setCurrentMenuIndex] = useState(0)
   const [isImageLoading, setIsImageLoading] = useState(false)
+
+  // Fetch recommendations function
+  const fetchRecommendations = async () => {
+    try {
+      // User location info (should be obtained from GPS or user settings)
+      const userLocation: [number, number] = [126.9619864, 37.477136] // Seoul Gangnam Station coordinates
+
+      const recommendations = await api.getMenuRecommendations(userLocation, {
+        maxResults: 10,
+      })
+
+      if (recommendations && recommendations.success && recommendations.results) {
+        // 매장(place_id)가 중복되는 경우 가장 먼저 나오는 것만 보여주고 나머지는 필터링
+        const uniquePlaceMenus = []
+        const seenPlaceIds = new Set()
+        for (const menu of recommendations.results) {
+          if (menu.image_urls && menu.image_urls.length > 0 && !seenPlaceIds.has(menu.place_name)) {
+            uniquePlaceMenus.push(menu)
+            seenPlaceIds.add(menu.place_name)
+          }
+        }
+        setRecommendedMenus(uniquePlaceMenus)
+        setCurrentMenuIndex(0) // Reset to first menu when refreshing
+      }
+    } catch (error) {
+      console.error("Failed to fetch recommended menus:", error)
+    }
+  }
 
   // Automatically fetch recommended menus on screen load
   useEffect(() => {
     const fetchInitialRecommendations = async () => {
       setIsLoadingRecommendations(true)
-      try {
-        // User location info (should be obtained from GPS or user settings)
-        const userLocation: [number, number] = [126.9619864, 37.477136] // Seoul Gangnam Station coordinates
-
-        const recommendations = await api.getMenuRecommendations(userLocation, {
-          maxResults: 10,
-        })
-
-        if (recommendations && recommendations.success && recommendations.results) {
-          // 매장(place_id)가 중복되는 경우 가장 먼저 나오는 것만 보여주고 나머지는 필터링
-          const uniquePlaceMenus = []
-          const seenPlaceIds = new Set()
-          for (const menu of recommendations.results) {
-            if (menu.image_urls && menu.image_urls.length > 0 && !seenPlaceIds.has(menu.place_name)) {
-              uniquePlaceMenus.push(menu)
-              seenPlaceIds.add(menu.place_name)
-            }
-          }
-          setRecommendedMenus(uniquePlaceMenus)
-        }
-      } catch (error) {
-        console.error("Failed to fetch recommended menus:", error)
-      } finally {
-        setIsLoadingRecommendations(false)
-      }
+      await fetchRecommendations()
+      setIsLoadingRecommendations(false)
     }
 
     fetchInitialRecommendations()
   }, [])
+
+  // Handle pull-to-refresh
+  const onRefresh = async () => {
+    setRefreshing(true)
+    await fetchRecommendations()
+    setRefreshing(false)
+  }
 
   // Preload images
   useEffect(() => {
@@ -149,11 +165,26 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   }
 
   const currentMenu = recommendedMenus[currentMenuIndex]
+  const screenHeight = Dimensions.get("window").height
 
   return (
     <View style={$container}>
       {/* Main Full Screen Content */}
-      <View style={$fullScreenContainer}>
+      <ScrollView
+        style={$fullScreenContainer}
+        contentContainerStyle={[$scrollContentContainer, { minHeight: screenHeight + 1 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#f66c51"
+            colors={["#f66c51"]}
+            progressViewOffset={60}
+          />
+        }
+        bounces={true}
+        scrollEventThrottle={16}
+      >
         {isLoadingRecommendations ? (
           // Loading state
           <View style={$loadingContainer}>
@@ -273,7 +304,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
             <Text style={$emptySubtext}>잠시 후 다시 시도해 주세요</Text>
           </View>
         )}
-      </View>
+      </ScrollView>
 
       {/* Bottom Tabs */}
       <View style={$bottomTabs}>
@@ -316,6 +347,10 @@ const $container: ViewStyle = {
 const $fullScreenContainer: ViewStyle = {
   flex: 1,
   position: "relative",
+}
+
+const $scrollContentContainer: ViewStyle = {
+  flex: 1,
 }
 
 const $backgroundImage: ViewStyle = {
@@ -485,6 +520,7 @@ const $imageLoadingContainer: ViewStyle = {
   backgroundColor: "rgba(0,0,0,0.3)",
   zIndex: 20,
 }
+
 
 const $emptyState: ViewStyle = {
   flex: 1,
