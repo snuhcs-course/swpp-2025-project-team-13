@@ -112,7 +112,18 @@ CATEGORY_ALIASES = {
     'healthy/salad': '다이어트/샐러드',
     'bar/pub': '주점',
     'convenience': '간편식',
-    'miscellaneous': '기타'
+    'miscellaneous': '기타',
+    # 추가 영어별칭 매핑
+    'mexican': '세계음식',  # 멕시코/남미음식이 세계음식 그룹에 속함
+    'thai': '세계음식',  # 태국음식이 세계음식 그룹에 속함
+    'italian': '세계음식',  # 이탈리아음식이 세계음식 그룹에 속함
+    'indian': '세계음식',  # 인도음식이 세계음식 그룹에 속함
+    'vietnamese': '세계음식',  # 베트남음식이 세계음식 그룹에 속함
+    'spanish': '세계음식',  # 스페인음식이 세계음식 그룹에 속함
+    'turkish': '세계음식',  # 터키음식이 세계음식 그룹에 속함
+    'american': '양식',  # 미국식 음식은 일반적으로 양식으로 분류
+    'usa': '양식',
+    'united states': '양식'
 }
 
 class UserProfile:
