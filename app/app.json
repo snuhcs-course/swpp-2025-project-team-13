@@ -74,6 +74,13 @@
           "locationAlwaysPermission": "Foodigram needs your location to recommend nearby restaurants.",
           "locationWhenInUsePermission": "Foodigram needs your location to recommend nearby restaurants."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Foodigram needs access to your photos to upload food images.",
+          "cameraPermission": "Foodigram needs access to your camera to take photos."
+        }
       ]
     ],
     "experiments": {
