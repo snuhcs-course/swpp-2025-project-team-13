@@ -309,7 +309,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
               })
             }}
           >
-            <Text style={$floatingButtonText}>10장 업로드</Text>
+            <Text style={$floatingButtonText}>사진 선택</Text>
           </TouchableOpacity>
         </View>
       )}
