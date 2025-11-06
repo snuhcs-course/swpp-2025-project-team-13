@@ -30,8 +30,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   const [recommendedMenus, setRecommendedMenus] = useState<MenuRecommendationItem[]>([])
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [currentMenuIndex, setCurrentMenuIndex] = useState(0)
-  const [isImageLoading, setIsImageLoading] = useState(false)
+  const [isImageLoading, setIsImageLoading] = useState<{ [key: string]: boolean }>({})
 
   // Fetch recommendations function
   const fetchRecommendations = async () => {
@@ -54,7 +53,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           }
         }
         setRecommendedMenus(uniquePlaceMenus)
-        setCurrentMenuIndex(0) // Reset to first menu when refreshing
       }
     } catch (error) {
       console.error("Failed to fetch recommended menus:", error)
@@ -107,45 +105,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     preloadImages()
   }, [recommendedMenus])
 
-  // Preload next images when index changes
-  useEffect(() => {
-    if (recommendedMenus.length === 0) return
-
-    const preloadNextImages = async () => {
-      try {
-        const nextIndexes = [
-          (currentMenuIndex + 1) % recommendedMenus.length,
-          (currentMenuIndex + 2) % recommendedMenus.length,
-        ]
-
-        const imagesToPreload = nextIndexes.map((index) => {
-          const menu = recommendedMenus[index]
-          if (menu?.image_urls && menu.image_urls.length > 0) {
-            return Image.prefetch(menu.image_urls[0])
-          }
-          return Promise.resolve()
-        })
-
-        await Promise.all(imagesToPreload)
-      } catch (error) {
-        // Ignore errors
-      }
-    }
-
-    preloadNextImages()
-  }, [currentMenuIndex, recommendedMenus])
-
-  const handleNextMenu = () => {
-    if (recommendedMenus.length === 0) return
-    setCurrentMenuIndex((prev) => (prev + 1) % recommendedMenus.length)
-  }
-
-  const handlePreviousMenu = () => {
-    if (recommendedMenus.length === 0) return
-    // Don't go back from the first item
-    if (currentMenuIndex === 0) return
-    setCurrentMenuIndex((prev) => prev - 1)
-  }
 
   const toggleBookmark = (menu: MenuRecommendationItem) => {
     const imageUrl = menu.image_urls && menu.image_urls.length > 0 ? menu.image_urls[0] : undefined
@@ -164,7 +123,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     })
   }
 
-  const currentMenu = recommendedMenus[currentMenuIndex]
   const screenHeight = Dimensions.get("window").height
 
   return (
@@ -172,7 +130,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
       {/* Main Full Screen Content */}
       <ScrollView
         style={$fullScreenContainer}
-        contentContainerStyle={[$scrollContentContainer, { minHeight: screenHeight + 1 }]}
+        contentContainerStyle={$scrollContentContainer}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -187,28 +145,28 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
       >
         {isLoadingRecommendations ? (
           // Loading state
-          <View style={$loadingContainer}>
+          <View style={[$loadingContainer, { height: screenHeight }]}>
             <Text style={$loadingText}>근처 맛집을 찾고 있어요...</Text>
           </View>
-        ) : recommendedMenus.length > 0 && currentMenu ? (
-          // Full screen menu display
-          <>
-            {/* Background Image */}
+        ) : recommendedMenus.length > 0 ? (
+          // Vertical list of menu items
+          recommendedMenus.map((menu, index) => (
             <ImageBackground
+              key={menu.id || index}
               source={{
                 uri:
-                  currentMenu.image_urls && currentMenu.image_urls.length > 0
-                    ? currentMenu.image_urls[0]
+                  menu.image_urls && menu.image_urls.length > 0
+                    ? menu.image_urls[0]
                     : undefined,
               }}
-              style={$backgroundImage}
+              style={[$backgroundImage, { height: screenHeight }]}
               resizeMode="cover"
-              onLoadStart={() => setIsImageLoading(true)}
-              onLoadEnd={() => setIsImageLoading(false)}
-              onError={() => setIsImageLoading(false)}
+              onLoadStart={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: true }))}
+              onLoadEnd={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
+              onError={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
             >
               {/* Image Loading Indicator */}
-              {isImageLoading && (
+              {isImageLoading[menu.id] && (
                 <View style={$imageLoadingContainer}>
                   <ActivityIndicator size="large" color="#fff" />
                 </View>
@@ -226,19 +184,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
                 style={$gradientOverlay}
               />
 
-              {/* Progress Indicators */}
-              <View style={$progressContainer}>
-                {recommendedMenus.map((_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      $progressBar,
-                      index <= currentMenuIndex && $progressBarActive,
-                    ]}
-                  />
-                ))}
-              </View>
-
               {/* Top Header */}
               <View style={$topHeader}>
                 
@@ -248,58 +193,46 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
               <View style={$bottomInfo}>
                 <View style={$restaurantNameContainer}>
                 <Text style={$restaurantName} numberOfLines={2}>
-                  {currentMenu.place_name}
+                  {menu.place_name}
                 </Text>
                 <TouchableOpacity
                   style={$headerButton}
-                  onPress={() => toggleBookmark(currentMenu)}
+                  onPress={() => toggleBookmark(menu)}
                 >
                   <Bookmark
                     size={24}
                     color="#fff"
-                    fill={menuScrapStore.isScrapped(currentMenu.id) ? "#fff" : "transparent"}
+                    fill={menuScrapStore.isScrapped(menu.id) ? "#fff" : "transparent"}
                   />
                 </TouchableOpacity>
                 </View>
 
                 
                 <Text style={$restaurantDetails} numberOfLines={1}>
-                  {currentMenu.category} • {currentMenu.location}
+                  {menu.category} • {menu.location}
                 </Text>
                 <View style={$menuDetails}>
                   <Text style={$menuNameLarge} numberOfLines={1}>
-                    {currentMenu.menu_name}
+                    {menu.menu_name}
                   </Text>
                   <Text style={$menuPriceLarge} numberOfLines={1}>
-                    {currentMenu.price ? `₩${currentMenu.price.toLocaleString()}` : "가격 정보 없음"}
+                    {menu.price ? `₩${menu.price.toLocaleString()}` : "가격 정보 없음"}
                   </Text>
                   <Text style={$menuRatingLarge} numberOfLines={1}>
-                    ⭐ {currentMenu.rating} (리뷰 {currentMenu.review_count}개)
+                    ⭐ {menu.rating} (리뷰 {menu.review_count}개)
                   </Text>
-                  {currentMenu.reason && (
+                  {menu.reason && (
                     <Text style={$menuReasonLarge} numberOfLines={2}>
-                      {currentMenu.category} 카테고리
+                      {menu.category} 카테고리
                     </Text>
                   )}
                 </View>
               </View>
-
-              {/* Touch Areas for Navigation */}
-              <TouchableOpacity
-                style={$leftTouchArea}
-                activeOpacity={1}
-                onPress={handlePreviousMenu}
-              />
-              <TouchableOpacity
-                style={$rightTouchArea}
-                activeOpacity={1}
-                onPress={handleNextMenu}
-              />
             </ImageBackground>
-          </>
+          ))
         ) : (
           // Error state
-          <View style={$emptyState}>
+          <View style={[$emptyState, { height: screenHeight }]}>
             <Text style={$emptyText}>음식점을 불러오지 못했어요</Text>
             <Text style={$emptySubtext}>잠시 후 다시 시도해 주세요</Text>
           </View>
@@ -350,13 +283,12 @@ const $fullScreenContainer: ViewStyle = {
 }
 
 const $scrollContentContainer: ViewStyle = {
-  flex: 1,
+  width: "100%",
 }
 
 const $backgroundImage: ViewStyle = {
-  flex: 1,
   width: "100%",
-  height: "100%",
+  justifyContent: "space-between",
 }
 
 const $gradientOverlayTop: ViewStyle = {
@@ -373,28 +305,6 @@ const $gradientOverlay: ViewStyle = {
   right: 0,
   bottom: 0,
   height: "50%",
-}
-
-const $progressContainer: ViewStyle = {
-  position: "absolute",
-  top: spacing.xl + spacing.xs,
-  left: spacing.sm,
-  right: spacing.sm,
-  flexDirection: "row",
-  gap: 4,
-  zIndex: 15,
-  marginTop: spacing.lg,
-}
-
-const $progressBar: ViewStyle = {
-  flex: 1,
-  height: 3,
-  backgroundColor: "rgba(255, 255, 255, 0.3)",
-  borderRadius: 2,
-}
-
-const $progressBarActive: ViewStyle = {
-  backgroundColor: "rgba(255, 255, 255, 0.9)",
 }
 
 const $topHeader: ViewStyle = {
@@ -477,24 +387,6 @@ const $menuReasonLarge: TextStyle = {
   color: "rgba(255,255,255,0.85)",
   fontStyle: "italic",
   marginTop: 4,
-}
-
-const $leftTouchArea: ViewStyle = {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  width: "50%",
-  height: "100%",
-  zIndex: 5,
-}
-
-const $rightTouchArea: ViewStyle = {
-  position: "absolute",
-  top: 0,
-  right: 0,
-  width: "50%",
-  height: "100%",
-  zIndex: 5,
 }
 
 const $loadingContainer: ViewStyle = {
