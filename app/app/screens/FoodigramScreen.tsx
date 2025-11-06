@@ -254,7 +254,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         </View>
       </ImageBackground>
     )
-  }, [screenHeight, isImageLoading, toggleBookmark, menuScrapStore])
+  }, [screenHeight, isImageLoading, toggleBookmark, menuScrapStore.scrappedMenus.length])
 
   // Get item layout for performance optimization
   const getItemLayout = useCallback(
@@ -316,6 +316,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         ListFooterComponent={renderFooter}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.5}
+        extraData={menuScrapStore.scrappedMenus.length}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
