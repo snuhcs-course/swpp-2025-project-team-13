@@ -89,7 +89,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
         label_manually_edited: photo.label_manually_edited || false
       }));
 
-    setUserImages(currentImages);
+    // Merge without duplicating already-loaded items
+    setUserImages(prev => {
+      const seen = new Set(prev.map(i => i.image.uri))
+      const added = currentImages.filter(i => !seen.has(i.image.uri))
+      return [...prev, ...added]
+    })
   }
   useEffect(() => { getUserPhotos(); }, []);
 
