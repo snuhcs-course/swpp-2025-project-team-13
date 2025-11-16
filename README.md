@@ -40,7 +40,12 @@ npx expo install expo-image-picker expo-location
 ### Backend Setup
 
 ```bash
-cd server
+# Turn on postgresql docker
+cd server/psql/settings
+docker compose up -d
+
+# Turn on django server
+cd ../.. # now at server
 uv sync
 uv run python manage.py migrate
 uv run python manage.py createsuperuser  # Required for authentication
@@ -50,6 +55,7 @@ uv run python manage.py runserver
 ### Frontend Setup
 
 ```bash
+# Java 17 required
 cd app
 npm install
 npx expo prebuild
