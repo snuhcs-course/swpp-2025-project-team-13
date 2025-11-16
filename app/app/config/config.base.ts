@@ -13,8 +13,9 @@ const BaseConfig: ConfigBaseProps = {
 
   /**
    * Only enable if we're catching errors in the right environment
+   * Set to "dev" to show errors only in development, not in production builds
    */
-  catchErrors: "always",
+  catchErrors: "dev",
 
   /**
    * This is a list of all the route names that will exit the app if the back button
