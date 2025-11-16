@@ -7,6 +7,8 @@ import { colors, spacing } from "app/theme"
 import { api } from "app/services/api"
 import { Ionicons } from "@expo/vector-icons"
 import * as Location from "expo-location"
+import * as MediaLibrary from "expo-media-library"
+import { useAlbumScanner } from "app/services/albums/useAlbumScanner"
 import { match } from "ts-pattern"
 
 interface OnboardingScreenProps extends AppStackScreenProps<"Onboarding"> { }
@@ -63,6 +65,7 @@ const CUISINES = [
 // 새로운 입맛 스텝 정의
 type TasteStep =
   | "location"
+  | "gallery"
   | "sweet"
   | "spicy"
   | "salty"
@@ -73,6 +76,7 @@ type TasteStep =
 
 const TASTE_STEPS: TasteStep[] = [
   "location",
+  "gallery",
   "sweet",
   "spicy",
   "salty",
@@ -95,6 +99,8 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
   })
   const [isLoading, setIsLoading] = useState(false)
   const [locationPermissionGranted, setLocationPermissionGranted] = useState(false)
+  const [galleryPermissionGranted, setGalleryPermissionGranted] = useState(false)
+  const { scanAlbums } = useAlbumScanner()
 
   const currentStep = TASTE_STEPS[currentStepIdx]
   const totalSteps = TASTE_STEPS.length
@@ -128,6 +134,28 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
         console.log("Location error:", error)
       }
       moveToNextStep()
+    }
+  }
+
+  const handleGalleryPermission = async () => {
+    const moveToNextStep = () => {
+      if (currentStepIdx < totalSteps - 1) {
+        setCurrentStepIdx(currentStepIdx + 1)
+      }
+    }
+
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync()
+      if (status === 'granted') {
+        setGalleryPermissionGranted(true)
+        // Start scanning albums in the background
+        scanAlbums(() => {
+          console.log("Gallery image synced")
+        })
+        moveToNextStep()
+      }
+    } catch (error) {
+      console.log("Gallery permission error:", error)
     }
   }
 
@@ -393,10 +421,42 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
     </View>
   )
 
+  const renderGalleryPermission = () => (
+    <View style={$stepContainer}>
+      <View style={$locationIconContainer}>
+        <Ionicons 
+          name="images" 
+          size={80} 
+          color={galleryPermissionGranted ? colors.palette.primary500 : colors.palette.neutral400}
+        />
+      </View>
+      <Text style={$stepTitle}>갤러리 동기화</Text>
+      <Text style={$stepSubtitle}>
+        {'갤러리의 음식 사진을 자동으로 동기화해서 추천에 활용해요.'}
+      </Text>
+      <View style={$locationBenefitsContainer}>
+        <View style={$benefitItem}>
+          <Ionicons name="camera" size={24} color={colors.palette.primary500} />
+          <Text style={$benefitText}>음식 사진 자동 인식</Text>
+        </View>
+        <View style={$benefitItem}>
+          <Ionicons name="sync" size={24} color={colors.palette.primary500} />
+          <Text style={$benefitText}>맞춤형 추천 향상</Text>
+        </View>
+        <View style={$benefitItem}>
+          <Ionicons name="images-outline" size={24} color={colors.palette.primary500} />
+          <Text style={$benefitText}>개인 갤러리 관리</Text>
+        </View>
+      </View>
+    </View>
+  )
+
   const renderCurrentStep = () => {
     switch (currentStep) {
       case "location":
         return renderLocationPermission()
+      case "gallery":
+        return renderGalleryPermission()
       case "sweet":
         return renderTasteStep("단 걸 좋아하시나요?", "sweet_level", sweetOptions, preferences.sweet_level)
       case "spicy":
@@ -438,6 +498,15 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
             <RNText style={$continueButtonText}>위치 접근 허용</RNText>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleSkip} style={$skipButton}>
+          <RNText style={$skipText}>건너뛰기</RNText>
+        </TouchableOpacity>
+        </>
+        )).with("gallery", () => (
+          <>
+          <TouchableOpacity style={$continueButton} onPress={handleGalleryPermission} disabled={isLoading}>
+            <RNText style={$continueButtonText}>갤러리 접근 허용</RNText>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleNext} style={$skipButton}>
           <RNText style={$skipText}>건너뛰기</RNText>
         </TouchableOpacity>
         </>
