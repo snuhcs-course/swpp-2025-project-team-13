@@ -9,7 +9,6 @@ from .image_utils import _read_image_from_s3, get_clip_embedding_from_bytes, get
 
 logger = logging.getLogger(__name__)
 
-
 @transaction.atomic
 def create_user_with_profile(*, username: str, email: str, password: str, bio: str = "", preferences: dict | None = None) -> User:
     user = User.objects.create_user(username=username, email=email, password=password)

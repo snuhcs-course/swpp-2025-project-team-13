@@ -633,7 +633,6 @@ def recommend_menu(request):
         if ep_from_gallery is not None:
             exploration_preference = ep_from_gallery
             logger.info(f"갤러리 기반 exploration_preference 적용: {exploration_preference}")
-
         # 스크랩 기반 상위 카테고리를 선호 카테고리에 병합 (기존 로직 보존 + 보강)
         try:
             scrap_pref_cats = derive_preferred_categories_from_scraps(request.user.id, top_k=3, min_count=1)
