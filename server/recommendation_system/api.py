@@ -6,8 +6,9 @@
 
 import json
 import logging
+import math
 import random
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Tuple, Any
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -21,9 +22,7 @@ from rest_framework import status
 
 from .user_profile import UserProfileService, create_sample_user_profile
 from .scoring import SearchContext, HybridScorer, MMRReranker, RecommendationReranker
-# Chroma 기반 유틸 사용(사용자 갤러리 다양성 → exploration_preference 보정)
-from . import VectorIndexBuilder  # alias to ChromaVectorIndexBuilder
-from users.models import UserPreference
+from users.models import UserPreference, UserGalleryImage
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +181,42 @@ def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_servi
 #         # ... (주석 처리됨)
 # ===== 구버전 API 끝 =====
 
+def calculate_gallery_exploration_preference(user_id: int, min_images: int = 10) -> Optional[float]:
+    """
+    사용자 갤러리 이미지 카테고리 분포로 탐험성 점수(0~5) 계산
+    """
+    try:
+        categories = list(
+            UserGalleryImage.objects.filter(user_id=user_id)
+            .exclude(category_tag__isnull=True)
+            .exclude(category_tag__exact='')
+            .values_list('category_tag', flat=True)
+        )
+    except Exception as exc:
+        logger.warning(f"갤러리 탐험성 계산 실패(user_id={user_id}): {exc}")
+        return None
+
+    if len(categories) < min_images:
+        return None
+
+    counts = Counter(categories)
+    total = sum(counts.values())
+    distinct = len(counts)
+
+    if total == 0 or distinct == 0:
+        return None
+
+    probabilities = [count / total for count in counts.values()]
+    entropy = -sum(p * math.log(p + 1e-12) for p in probabilities)
+    max_entropy = math.log(distinct)
+
+    if max_entropy <= 0:
+        return None
+
+    exploration_score = round(5.0 * (entropy / max_entropy), 2)
+    return exploration_score
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def recommend_menu(request):
@@ -248,14 +283,10 @@ def recommend_menu(request):
                 'distance_preference': data.get('distance_preference', 2.0)
             }
         # 갤러리 카테고리 다양성 기반 exploration_preference 보정
-        try:
-            vib = VectorIndexBuilder(None, './chroma_db')
-            ep_from_gallery = vib.get_user_category_exploration_preference(request.user.id, min_images=10)
-            if ep_from_gallery is not None:
-                exploration_preference = ep_from_gallery
-                logger.info(f"갤러리 기반 exploration_preference 적용: {exploration_preference}")
-        except Exception as e:
-            logger.warning(f"갤러리 기반 exploration_preference 계산 실패: {e}")
+        ep_from_gallery = calculate_gallery_exploration_preference(request.user.id, min_images=10)
+        if ep_from_gallery is not None:
+            exploration_preference = ep_from_gallery
+            logger.info(f"갤러리 기반 exploration_preference 적용: {exploration_preference}")
 
         gallery_analysis = data.get('gallery_analysis')
         behavior_data = data.get('behavior_data')

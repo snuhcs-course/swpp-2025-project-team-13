@@ -1,4 +1,3 @@
-import sqlite3
 from urllib.parse import unquote, urlparse
 from config.settings import AWS_STORAGE_BUCKET_NAME, S3_CLIENT
 import torch
@@ -15,6 +14,20 @@ model_name = "openai/clip-vit-base-patch32"
 model = CLIPModel.from_pretrained(model_name).to(device)
 processor = CLIPProcessor.from_pretrained(model_name)
 
+DEFAULT_FOOD_CATEGORIES: list[str] = [
+    "한식 Korean food",
+    "일식 Japanese food",
+    "중식 Chinese food",
+    "이탈리안 Italian food",
+    "멕시칸 Mexican food",
+    "인도 Indian food",
+    "아메리칸 American food",
+    "태국 Thai food",
+    "지중해 Mediterranean food",
+    "프렌치 French food",
+    "베트남 Vietnamese food",
+    "스페인 Spanish food",
+]
 
 def _extract_s3_key(url: str) -> str:
     parsed = urlparse(url)
@@ -33,18 +46,7 @@ def _read_image_from_s3(url: str) -> bytes:
     return image_bytes
 
 def _get_food_categories() -> list[str]:
-    with sqlite3.connect("chroma_db/chroma.sqlite3") as conn:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-        SELECT string_value AS category
-        FROM embedding_metadata
-        WHERE key = 'category';
-        """)
-
-        categories = [category[0].strip() for category in cursor.fetchall()]
-        categories = list(dict.fromkeys(categories))
-        return categories
+    return DEFAULT_FOOD_CATEGORIES
 
 
 def _predict_category_from_bytes(image_bytes: bytes, categories: list[str]) -> tuple[str, float]:
