@@ -52,8 +52,7 @@ adb reverse tcp:8000 tcp:8000
 ```
 
 ## 🎯 Demo Features
-
-https://github.com/user-attachments/assets/ddd71471-e539-42c1-99cc-56961c5035fb
+https://github.com/user-attachments/assets/8360ccd4-26c4-4832-ae7e-945c20ec707c
 
 ### Core Functionality
 
