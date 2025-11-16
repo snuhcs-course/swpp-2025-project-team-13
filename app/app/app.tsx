@@ -33,9 +33,9 @@ import Config from "./config"
 
 import { Amplify } from "aws-amplify"
 import amplifyconfig from "./amplifyconfiguration.json"
+Amplify.configure(amplifyconfig)
 import { useImageLabelingModels, useImageLabelingProvider } from "@infinitered/react-native-mlkit-image-labeling"
 import { MODELS } from "./config/ImageLabelingConfig"
-Amplify.configure(amplifyconfig)
 
 export const NAVIGATION_PERSISTENCE_KEY = "NAVIGATION_STATE"
 

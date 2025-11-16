@@ -49,8 +49,28 @@ class UserPreference(models.Model):
 class UserGalleryImage(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="gallery_images")
     image_url = models.URLField()
+
+    # Primary label (best match from CLIP + foodlist.json)
     ai_label = models.CharField(max_length=100, blank=True)
     category_tag = models.CharField(max_length=100, blank=True)
+
+    # Alternative labels (top 5 suggestions for user to choose from)
+    label_alternatives = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of dicts: [{'name': '치킨', 'confidence': 0.95}, ...]"
+    )
+
+    # Confidence score of the primary label
+    label_confidence = models.FloatField(default=0.0, help_text="0.0-1.0 confidence")
+
+    # Track if label was manually edited by user
+    label_manually_edited = models.BooleanField(default=False)
+    label_edited_at = models.DateTimeField(null=True, blank=True)
+
+    # Original inferred label (before user edit)
+    original_ai_label = models.CharField(max_length=100, blank=True)
+
     embedding = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     local_uri = models.CharField(max_length=100, blank=True)
@@ -58,7 +78,11 @@ class UserGalleryImage(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["user", "category_tag"]),
         ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.ai_label} ({self.created_at.date()})"
 
 
 class UserScrap(models.Model):

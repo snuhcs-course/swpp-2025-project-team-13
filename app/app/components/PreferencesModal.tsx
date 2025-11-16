@@ -261,7 +261,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
           <View style={$modalContent}>
             {/* Header */}
             <View style={$header}>
-              <Text style={$headerTitle}>취향 설정</Text>
+              <Text style={$headerTitle}>음식 취향 설정하기</Text>
               <TouchableOpacity onPress={onClose} style={$closeButton}>
                 <X size={24} color={colors.palette.neutral700} />
               </TouchableOpacity>
@@ -287,6 +287,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
                 text="저장"
                 onPress={savePreferences}
                 disabled={saving}
+                preset="filled"
                 style={$saveButton}
               />
             </View>
@@ -404,6 +405,6 @@ const $footer: ViewStyle = {
 }
 
 const $saveButton: ViewStyle = {
-  // Button styles are handled by the Button component
+  borderRadius: 12,
   marginBottom: spacing.md,
 }

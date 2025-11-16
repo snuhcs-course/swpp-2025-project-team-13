@@ -259,7 +259,7 @@ export class Api {
     return this.apisauce.patch("/onboarding/update/", preferences)
   }
 
-  async uploadPhoto(photoUrl: string, photoUri: string) {
+  async uploadPhoto(photoUrl: string, photoUri: string, imageBlob?: any) {
     // ensure csrf header is present; get it if missing
     // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
     const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
@@ -267,7 +267,70 @@ export class Api {
       await this.getCsrf()
     }
     await this.attachCookiesHeader()
-    return this.apisauce.post("/photos/", { photo_url: photoUrl, local_uri: photoUri})
+
+    // Step 1: Create photo metadata record with S3 URL
+    console.log(`Creating photo metadata: photoUrl="${photoUrl}", photoUri="${photoUri}"`)
+    const metadataResponse = await this.apisauce.post("/photos/", {
+      photo_url: photoUrl,
+      local_uri: photoUri,
+    })
+
+    if (!metadataResponse.ok || !(metadataResponse.data as any)?.id) {
+      console.error("Failed to create photo metadata:", metadataResponse)
+      return metadataResponse
+    }
+
+    const photoId = (metadataResponse.data as any).id
+    console.log(`Photo metadata created with ID ${photoId}`)
+
+    // Step 2: If we have the image blob, process it with CLIP
+    if (imageBlob && imageBlob.size > 0) {
+      console.log(`Processing image with CLIP: ${imageBlob.size} bytes`)
+      try {
+        await this.processPhotoWithClip(photoId, imageBlob)
+        console.log(`CLIP processing completed for photo ${photoId}`)
+      } catch (error) {
+        console.warn(`CLIP processing failed for photo ${photoId}: ${error}`)
+        // Don't fail the upload if CLIP fails - photo is already created
+      }
+    }
+
+    return metadataResponse
+  }
+
+  async processPhotoWithClip(photoId: number, imageBlob: any) {
+    // ensure csrf header is present and cookies are attached
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      console.log("CSRF token missing, fetching...")
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+
+    console.log(`Converting image blob (${imageBlob.size} bytes) to base64...`)
+
+    // Convert blob to base64
+    const base64Data = await this.blobToBase64(imageBlob)
+    console.log(`Base64 data size: ${base64Data.length} bytes`)
+
+    // Send as JSON body
+    return this.apisauce.patch(`/photos/${photoId}/process_clip/`, {
+      image_data: base64Data
+    })
+  }
+
+  private async blobToBase64(blob: any): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const result = reader.result as string
+        // Extract base64 part (after "data:...;base64,")
+        const base64 = result.split(',')[1] || result
+        resolve(base64)
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
   }
 
   async getUserPhotos(): Promise<any[]> {
@@ -278,7 +341,40 @@ export class Api {
       await this.getCsrf()
     }
     await this.attachCookiesHeader()
-    return (await this.apisauce.get("/photos/")).data;
+    return ((await this.apisauce.get("/photos/")).data as any) || [];
+  }
+
+  async updateImageLabel(photoId: number, newLabel: string) {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.patch(`/photos/${photoId}/update_label/`, { label: newLabel })
+  }
+
+  async deleteImage(photoId: number) {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.delete(`/photos/${photoId}/delete_image/`)
+  }
+
+  async searchFoods(query: string) {
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.get("/photos/search_foods/", { q: query })
   }
 
   private async attachCookiesHeader() {

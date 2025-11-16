@@ -1,12 +1,12 @@
 import { useAlbumScanner } from "app/services/albums/useAlbumScanner"
 import { api } from "app/services/api"
-import { getImage as getImageName } from "app/utils/imagenameFromAsseturi"
 import * as storage from "app/utils/storage"
-import { Asset } from "expo-media-library"
-import { Bookmark, Home, Image as ImageIcon, LogOut, Settings, User, X } from "lucide-react-native"
+import { Bookmark, Check, Home, Image as ImageIcon, LogOut, Settings, User, UtensilsCrossed } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import {
+  Alert,
+  Animated,
   Dimensions,
   Image,
   ImageStyle,
@@ -17,7 +17,7 @@ import {
   View,
   ViewStyle
 } from "react-native"
-import { PreferencesModal, RestaurantDetailModal, Text } from "../components"
+import { GalleryImageCard, RestaurantDetailModal, Text, PreferencesModal } from "../components"
 import { useStores } from "../models"
 import { AppStackScreenProps } from "../navigators"
 import { colors, spacing } from "../theme"
@@ -34,11 +34,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isPreferencesModalVisible, setIsPreferencesModalVisible] = useState(false)
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false)
+  const [isSelectMode, setIsSelectMode] = useState(false)
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(new Set())
+  const [isLoading, setIsLoading] = useState(false)
+  const [deleteConfirmationVisible, setDeleteConfirmationVisible] = useState(false)
 
-  const [userImages, setUserImages] = useState<Array<{ id: string, type: string, image: any, name: string }>>([
-    // { id: 'user1', type: 'user', image: require("../../assets/images/restaurant1.jpg"), name: 'My Food Photo 1' },
-    // { id: 'user2', type: 'user', image: require("../../assets/images/restaurant2.jpg"), name: 'My Food Photo 2' },
-  ]);
+  const [userImages, setUserImages] = useState<Array<any>>([])
+  const rotationValue = useRef(new Animated.Value(0)).current
+
+  // Handle rotation animation when loading
+  useEffect(() => {
+    if (isLoading) {
+      rotationValue.setValue(0)
+      Animated.loop(
+        Animated.timing(rotationValue, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        })
+      ).start()
+    }
+  }, [isLoading, rotationValue])
 
   useEffect(() => {
     let mounted = true
@@ -62,15 +78,53 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
     const currentImages = photoList
       .filter(photo => photo.local_uri)
       .map(photo => ({
-        id: photo.local_uri,
+        id: photo.id,
         type: 'user',
         image: { uri: photo.local_uri },
-        name: "User food photo"
+        name: "User food photo",
+        ai_label: photo.ai_label || "",
+        label_alternatives: photo.label_alternatives || [],
+        category_tag: photo.category_tag || "",
+        label_confidence: photo.label_confidence || 0.0,
+        label_manually_edited: photo.label_manually_edited || false
       }));
 
-    setUserImages(prevImages => [...prevImages, ...currentImages]);
+    setUserImages(currentImages);
   }
   useEffect(() => { getUserPhotos(); }, []);
+
+  const toggleImageSelection = (imageId: number) => {
+    const newSelected = new Set(selectedImageIds)
+    if (newSelected.has(imageId)) {
+      newSelected.delete(imageId)
+    } else {
+      newSelected.add(imageId)
+    }
+    setSelectedImageIds(newSelected)
+  }
+
+  const handleDeleteSelectedImages = async () => {
+    setDeleteConfirmationVisible(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    try {
+      const imageIds = Array.from(selectedImageIds)
+      // Delete each image
+      for (const id of imageIds) {
+        await api.deleteImage(id)
+      }
+      // Refresh photos list
+      await getUserPhotos()
+      // Clear selection
+      setSelectedImageIds(new Set())
+      setIsSelectMode(false)
+      setDeleteConfirmationVisible(false)
+    } catch (e) {
+      Alert.alert("오류", "사진 삭제 실패")
+      setDeleteConfirmationVisible(false)
+    }
+  }
 
   // Mock data for profile
   const user = {
@@ -119,6 +173,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
 
       <ScrollView style={$scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Section */}
+<<<<<<< HEAD
         <View style={$profileSection}>
           <View style={$profileImageContainer}>
             <Image
@@ -135,10 +190,32 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
           >
             <Text style={$editButtonText}>취향 설정</Text>
           </TouchableOpacity>
+=======
+        <View style={$profileSectionHorizontal}>
+          <TouchableOpacity onPress={() => logout()}>
+            <Text style={$userNameHorizontal}>{user.name}</Text>
+          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <TouchableOpacity
+              testID="personalization-button"
+              style={$iconButtonSquare}
+              onPress={() => setIsPreferencesModalVisible(true)}
+            >
+              <User size={24} color={colors.palette.neutral700} strokeWidth={2} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-button"
+              style={$iconButtonSquare}
+              onPress={() => setIsSettingsModalVisible(true)}
+            >
+              <Settings size={24} color={colors.palette.neutral700} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+>>>>>>> 30c5877 (feat: frontend mypage redesign & CLIP embedding applied; manual label change supported)
         </View>
 
         {/* Content */}
-        <View style={$gridContainer}>
+        <View style={[$gridContainer, { position: 'relative' }]}>
           {allPhotos.length === 0 ? (
             <View style={$emptyState}>
               <Text style={$emptyText}>사진이 아직 없습니다</Text>
@@ -148,99 +225,196 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
             </View>
           ) : (
             <View style={$photoGrid}>
-              {allPhotos.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[$photoCard, { width: imageSize, height: imageSize }]}
-                  onPress={() => {
-                    if (item.type === 'scrapped') {
-                      setSelectedRestaurantId(parseInt(item.id))
-                      setIsModalVisible(true)
-                    }
-                  }}
-                >
-                  <Image
-                    source={item.image}
-                    style={$photoImage}
-                    resizeMode="cover"
-                  />
-                </TouchableOpacity>
-              ))}
+              {allPhotos.map((item) => {
+                if (item.type === 'user') {
+                  const isSelected = selectedImageIds.has(item.id)
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[$photoCard, { width: imageSize, height: imageSize }]}
+                      onPress={() => {
+                        if (isSelectMode) {
+                          toggleImageSelection(item.id)
+                        }
+                      }}
+                      activeOpacity={isSelectMode ? 0.7 : 1}
+                    >
+                      {isSelectMode ? (
+                        <>
+                          <Image
+                            source={item.image}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              opacity: isSelected ? 0.5 : 1,
+                            }}
+                            resizeMode="cover"
+                          />
+                          {isSelected && (
+                            <View
+                              style={{
+                                position: "absolute",
+                                top: spacing.md,
+                                right: spacing.md,
+                                width: 24,
+                                height: 24,
+                                borderRadius: 12,
+                                backgroundColor: colors.error,
+                                justifyContent: "center",
+                                alignItems: "center",
+                              }}
+                            >
+                              <Check size={16} color="#FFFFFF" strokeWidth={3} />
+                            </View>
+                          )}
+                        </>
+                      ) : (
+                        <GalleryImageCard
+                          imageUri={item.image.uri}
+                          label={item.ai_label || "라벨 없음"}
+                          alternatives={item.label_alternatives || []}
+                          labelManuallyEdited={item.label_manually_edited || false}
+                          onLabelChange={async (newLabel: string) => {
+                            try {
+                              await api.updateImageLabel(item.id, newLabel)
+                              // Refresh photos list after updating label
+                              await getUserPhotos()
+                            } catch (e) {
+                              Alert.alert("오류", "라벨 업데이트 실패")
+                            }
+                          }}
+                          onImageDelete={async () => {
+                            // This callback is unused now since we removed delete from modal
+                            // but keeping for API compatibility
+                          }}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  )
+                } else {
+                  // Scrapped item
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[$photoCard, { width: imageSize, height: imageSize }]}
+                      onPress={() => {
+                        setSelectedRestaurantId(parseInt(item.id))
+                        setIsModalVisible(true)
+                      }}
+                    >
+                      <Image
+                        source={item.image}
+                        style={$photoImage}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  )
+                }
+              })}
             </View>
           )}
         </View>
       </ScrollView>
 
-      {/* Bottom Tabs */}
-      <View style={$bottomTabs}>
-        <TouchableOpacity
-          style={$tabButton}
-          testID="FoodigramTab"
-          onPress={() => {
-            if (__DEV__) {
-              console.log(`Profile: navigated to Foodigram`)
-            }
-            navigation.navigate("Foodigram")
-          }}
-        >
-          <Home size={24} color={colors.palette.neutral400} strokeWidth={2} />
-          <Text style={$tabButtonText}>추천</Text>
-        </TouchableOpacity>
+      {/* Bottom Tabs or Delete Button */}
+      {isSelectMode && selectedImageIds.size > 0 ? (
+        <View style={[
+          $bottomTabs,
+          { backgroundColor: colors.error, justifyContent: "center" }
+        ]}>
+          <TouchableOpacity
+            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+            onPress={handleDeleteSelectedImages}
+          >
+            <Text style={{
+              color: colors.palette.neutral100,
+              fontSize: 16,
+              fontWeight: "600"
+            }}>
+              삭제 ({selectedImageIds.size})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={$bottomTabs}>
+          <TouchableOpacity
+            style={$tabButton}
+            testID="FoodigramTab"
+            onPress={() => {
+              if (__DEV__) {
+                console.log(`Profile: navigated to Foodigram`)
+              }
+              navigation.navigate("Foodigram")
+            }}
+          >
+            <Home size={24} color={colors.palette.neutral400} strokeWidth={2} />
+            <Text style={$tabButtonText}>추천</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={$tabButton}
-          testID="ScrapTab"
-          onPress={() => {
-            if (__DEV__) {
-              console.log(`Profile: navigated to Scrap`)
-            }
-            navigation.navigate("Scrap")
-          }}
-        >
-          <Bookmark size={24} color={colors.palette.neutral400} strokeWidth={2} />
-          <Text style={$tabButtonText}>스크랩</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={$tabButton}
+            testID="ScrapTab"
+            onPress={() => {
+              if (__DEV__) {
+                console.log(`Profile: navigated to Scrap`)
+              }
+              navigation.navigate("Scrap")
+            }}
+          >
+            <Bookmark size={24} color={colors.palette.neutral400} strokeWidth={2} />
+            <Text style={$tabButtonText}>스크랩</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={$tabButton}
-          testID="UserTab"
-          onPress={() => {
-            if (__DEV__) {
-              console.log(`Profile: tapped profile button (already on Profile)`)
-            }
-            navigation.navigate("Profile")
-          }}
-        >
-          <User size={24} color={colors.palette.primary500} strokeWidth={2} />
-          <Text style={$tabButtonTextActive}>마이페이지</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={$tabButton}
+            testID="UserTab"
+            onPress={() => {
+              if (__DEV__) {
+                console.log(`Profile: tapped profile button (already on Profile)`)
+              }
+              navigation.navigate("Profile")
+            }}
+          >
+            <User size={24} color={colors.palette.primary500} strokeWidth={2} />
+            <Text style={$tabButtonTextActive}>마이페이지</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {/* Floating Settings Button */}
+      {/* Quick Selection Button */}
       <TouchableOpacity
-        testID="settings-floating-button"
-        style={$floatingSettingsButton}
-        onPress={() => setIsSettingsModalVisible(true)}
+        testID="quick-select-button"
+        style={[
+          $floatingSelectButton,
+          isSelectMode && { backgroundColor: colors.error }
+        ]}
+        onPress={() => {
+          setIsSelectMode(!isSelectMode)
+          if (isSelectMode) {
+            setSelectedImageIds(new Set())
+          }
+        }}
       >
-        <Settings size={28} color="#FFFFFF" />
+        <Check size={28} color="#FFFFFF" strokeWidth={3} />
       </TouchableOpacity>
 
       {/* Floating Gallery Button */}
       <TouchableOpacity
         testID="refresh-button"
         style={$floatingButton}
+        disabled={isLoading}
         onPress={() => {
-          scanAlbums((asset: Asset) => {
-            setUserImages(userImages => [...userImages, {
-              id: asset.id,
-              type: 'user',
-              image: { uri: asset.uri },
-              name: getImageName(asset),
-            }]);
+          setIsLoading(true)
+          scanAlbums(() => {
+            // Refresh photos list after new image is uploaded
+            setTimeout(() => {
+              getUserPhotos()
+              setIsLoading(false)
+            }, 500)
           })
         }}
       >
-        <ImageIcon size={28} color="#FFFFFF" />
+        <ImageIcon size={28} color={isLoading ? "#999" : "#FFFFFF"} />
       </TouchableOpacity>
 
       {/* Restaurant Detail Modal */}
@@ -259,6 +433,99 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
         onClose={() => setIsPreferencesModalVisible(false)}
       />
 
+      {/* Delete Confirmation Dialog */}
+      <Modal visible={deleteConfirmationVisible} transparent animationType="fade">
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: spacing.lg,
+          }}
+          onPress={() => setDeleteConfirmationVisible(false)}
+          activeOpacity={1}
+        >
+          <TouchableOpacity
+            style={{
+              backgroundColor: colors.background,
+              borderRadius: 12,
+              padding: spacing.lg,
+              minWidth: 280,
+            }}
+            onPress={() => {}}
+            activeOpacity={1}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "600",
+                color: colors.text,
+                marginBottom: spacing.md,
+              }}
+            >
+              삭제 확인
+            </Text>
+            <Text
+              style={{
+                fontSize: 16,
+                color: colors.palette.neutral700,
+                marginBottom: spacing.lg,
+                lineHeight: 24,
+              }}
+            >
+              {selectedImageIds.size}개의 사진을 삭제하시겠습니까?
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                gap: spacing.sm,
+                justifyContent: "flex-end",
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setDeleteConfirmationVisible(false)}
+                style={{
+                  paddingVertical: spacing.sm,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: 8,
+                  backgroundColor: colors.palette.neutral200,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "500",
+                    color: colors.text,
+                  }}
+                >
+                  취소
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmDelete}
+                style={{
+                  paddingVertical: spacing.sm,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: 8,
+                  backgroundColor: colors.error,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "500",
+                    color: colors.palette.neutral100,
+                  }}
+                >
+                  삭제
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Settings Modal */}
       <Modal
         visible={isSettingsModalVisible}
@@ -266,37 +533,75 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
         animationType="fade"
         onRequestClose={() => setIsSettingsModalVisible(false)}
       >
-        <View style={$settingsModalBackdrop}>
-          <View style={$settingsModalContainer}>
-            <View style={$settingsModalContent}>
-              {/* Header */}
-              <View style={$settingsModalHeader}>
-                <Text style={$settingsModalTitle}>설정</Text>
-                <TouchableOpacity 
-                  onPress={() => setIsSettingsModalVisible(false)} 
-                  style={$settingsCloseButton}
-                >
-                  <X size={24} color={colors.palette.neutral700} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Content */}
-              <View style={$settingsModalBody}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setIsSettingsModalVisible(false)
-                    logout()
-                  }}
-                  style={$settingsLogoutButton}
-                >
-                  <LogOut size={20} color={colors.error} />
-                  <Text style={$settingsLogoutText}>로그아웃</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
+        <TouchableOpacity
+          style={$settingsModalBackdrop}
+          onPress={() => setIsSettingsModalVisible(false)}
+          activeOpacity={1}
+        >
+          <TouchableOpacity
+            style={$settingsModalContent}
+            onPress={() => {}}
+            activeOpacity={1}
+          >
+            <TouchableOpacity
+              style={$logoutButtonContainer}
+              onPress={() => {
+                setIsSettingsModalVisible(false)
+                logout()
+              }}
+            >
+              <LogOut size={20} color={colors.error} strokeWidth={2} />
+              <Text style={$logoutButtonText}>로그아웃</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
+
+      {/* Loading Overlay */}
+      {isLoading && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  rotate: rotationValue.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ["0deg", "360deg"],
+                  }),
+                },
+              ],
+            }}
+          >
+            <UtensilsCrossed
+              size={64}
+              color={colors.palette.primary500}
+              strokeWidth={1.5}
+            />
+          </Animated.View>
+          <Text
+            style={{
+              marginTop: spacing.lg,
+              color: colors.palette.neutral100,
+              fontSize: 14,
+              fontWeight: "500",
+            }}
+          >
+            로딩중...
+          </Text>
+        </View>
+      )}
     </View>
   )
 })
@@ -329,20 +634,13 @@ const $userNameHorizontal: TextStyle = {
   color: colors.text,
 }
 
-const $editButtonHorizontal: ViewStyle = {
-  backgroundColor: "#f66c51",
-  paddingHorizontal: 20,
+const $iconButtonSquare: ViewStyle = {
+  width: 48,
+  height: 48,
   borderRadius: 12,
-  height: 40,
+  backgroundColor: colors.palette.neutral100,
   alignItems: "center",
   justifyContent: "center",
-  marginLeft: spacing.md,
-}
-
-const $editButtonText: TextStyle = {
-  color: "#FFFFFF",
-  fontSize: 16,
-  fontWeight: "bold",
 }
 
 const $gridContainer: ViewStyle = {
@@ -422,9 +720,9 @@ const $tabButtonTextActive: TextStyle = {
   fontWeight: "600",
 }
 
-const $floatingButton: ViewStyle = {
+const $floatingSelectButton: ViewStyle = {
   position: "absolute",
-  bottom: spacing.xl + 80, // Above bottom tabs
+  bottom: spacing.xl + 80 + 80, // Above gallery button
   right: spacing.xl,
   width: 64,
   height: 64,
@@ -442,9 +740,9 @@ const $floatingButton: ViewStyle = {
   elevation: 8,
 }
 
-const $floatingSettingsButton: ViewStyle = {
+const $floatingButton: ViewStyle = {
   position: "absolute",
-  bottom: spacing.xl + 80 + 80, // Above gallery button
+  bottom: spacing.xl + 80, // Above bottom tabs
   right: spacing.xl,
   width: 64,
   height: 64,
@@ -470,68 +768,25 @@ const $settingsModalBackdrop: ViewStyle = {
   padding: spacing.lg,
 }
 
-const $settingsModalContainer: ViewStyle = {
-  width: "100%",
-  maxWidth: 400,
-}
-
 const $settingsModalContent: ViewStyle = {
   backgroundColor: colors.background,
   borderRadius: 12,
-  overflow: "hidden",
-}
-
-const $settingsModalHeader: ViewStyle = {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
   padding: spacing.lg,
-  borderBottomWidth: 1,
-  borderBottomColor: colors.palette.neutral200,
+  minWidth: 200,
 }
 
-const $settingsModalTitle: TextStyle = {
-  fontSize: 20,
-  fontWeight: "bold",
-  color: colors.text,
-}
-
-const $settingsCloseButton: ViewStyle = {
-  padding: spacing.xs,
-}
-
-const $settingsModalBody: ViewStyle = {
-  padding: spacing.md,
-}
-
-const $settingsMenuItem: ViewStyle = {
-  paddingVertical: spacing.md,
-  paddingHorizontal: spacing.lg,
-  borderRadius: 8,
-  marginBottom: spacing.sm,
-}
-
-const $settingsMenuItemText: TextStyle = {
-  fontSize: 16,
-  color: colors.text,
-  fontWeight: "500",
-}
-
-const $settingsLogoutButton: ViewStyle = {
+const $logoutButtonContainer: ViewStyle = {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "center",
   paddingVertical: spacing.md,
   paddingHorizontal: spacing.lg,
   borderRadius: 8,
-  borderWidth: 1,
-  borderColor: colors.palette.neutral300,
-  backgroundColor: colors.background,
+  backgroundColor: colors.palette.neutral100,
   gap: spacing.sm,
-  marginTop: spacing.md,
 }
 
-const $settingsLogoutText: TextStyle = {
+const $logoutButtonText: TextStyle = {
   fontSize: 16,
   fontWeight: "600",
   color: colors.error,

@@ -1,26 +1,148 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import User, Follow, UserScrap, UserPreference
-from .serializers import UserSerializer, ProfileSerializer, FollowSerializer, UserScrapSerializer, UserPreferenceSerializer
+from .models import User, Follow, UserScrap, UserPreference, UserGalleryImage
+from .serializers import UserSerializer, ProfileSerializer, FollowSerializer, UserScrapSerializer, UserPreferenceSerializer, UserGalleryImageSerializer
 from restaurant.models import Restaurant
-from .serializers import UserGalleryImageSerializer, UserSerializer, ProfileSerializer, FollowSerializer
 from . import services
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class PhotoViewSet(viewsets.ViewSet):
+    """API for managing user gallery images with AI-inferred labels"""
+
     permission_classes = [IsAuthenticated]
 
     def list(self, request):
+        """List all photos for authenticated user"""
         photos = services.list_user_photos(user=request.user)
         serializer = UserGalleryImageSerializer(photos, many=True)
         return Response(serializer.data)
 
     def create(self, request):
-        photo = services.upload_user_photo(user=request.user, photo_url=request.data["photo_url"], local_uri=request.data["local_uri"])
+        """Create photo metadata record (S3 URL + local URI). CLIP processing happens separately."""
+        # Handle both form data and JSON
+        data = request.data or {}
+        photo_url = data.get("photo_url", "")
+        local_uri = data.get("local_uri", "")
+
+        logger.debug(f"Photo metadata request - photo_url: {photo_url}, local_uri: {local_uri}")
+
+        if not photo_url or not local_uri:
+            logger.error(f"Missing required fields: photo_url={photo_url}, local_uri={local_uri}")
+            return Response(
+                {'error': 'photo_url and local_uri are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create photo record WITHOUT image bytes (no CLIP processing here)
+        photo = services.upload_user_photo(
+            user=request.user,
+            photo_url=photo_url,
+            local_uri=local_uri,
+            image_bytes=None  # Don't process CLIP here
+        )
         serializer = UserGalleryImageSerializer(photo)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'])
+    def update_label(self, request, pk=None):
+        """Update image label manually"""
+        photo = get_object_or_404(UserGalleryImage, id=pk, user=request.user)
+        new_label = request.data.get('label')
+
+        if not new_label:
+            return Response(
+                {'error': 'Label is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        services.update_image_label(photo=photo, new_label=new_label)
+        serializer = UserGalleryImageSerializer(photo)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['delete'])
+    def delete_image(self, request, pk=None):
+        """Delete image from gallery"""
+        photo = get_object_or_404(UserGalleryImage, id=pk, user=request.user)
+        services.delete_image(photo=photo)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def search_foods(self, request):
+        """Search foodlist for matching food names"""
+        query = request.query_params.get('q', '').strip()
+
+        if not query:
+            return Response(
+                {'error': 'Search query is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            results = services.search_foodlist(query)
+            return Response({
+                'query': query,
+                'primary_results': results['primary'],
+                'secondary_results': results['secondary'],
+            })
+        except Exception as e:
+            logger.error(f"Error searching foodlist: {e}")
+            return Response(
+                {'error': f'Search failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    def process_clip(self, request, pk=None):
+        """Process image with CLIP using image bytes from request"""
+        photo = get_object_or_404(UserGalleryImage, id=pk, user=request.user)
+        image_bytes = None
+
+        logger.debug(f"CLIP processing request for photo {pk}")
+
+        # Get image from FormData FILES
+        if request.FILES and "image" in request.FILES:
+            image_file = request.FILES["image"]
+            image_bytes = image_file.read()
+            logger.debug(f"Got image from FILES, size: {len(image_bytes) if image_bytes else 0} bytes")
+        elif request.data and "image_data" in request.data:
+            # Handle base64 encoded image data
+            import base64
+            try:
+                image_data = request.data["image_data"]
+                if "," in image_data:
+                    image_data = image_data.split(",", 1)[1]
+                image_bytes = base64.b64decode(image_data)
+                logger.debug(f"Decoded base64 image, size: {len(image_bytes) if image_bytes else 0} bytes")
+            except Exception as e:
+                logger.error(f"Failed to decode image data: {e}")
+
+        if not image_bytes:
+            logger.error(f"No image provided for CLIP processing of photo {pk}")
+            return Response(
+                {'error': 'Image file or image_data is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Process image with CLIP
+        try:
+            services.process_photo_with_clip(photo=photo, image_bytes=image_bytes)
+            logger.info(f"Successfully processed photo {pk} with CLIP")
+
+            # Fetch updated photo
+            serializer = UserGalleryImageSerializer(photo)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error processing photo {pk} with CLIP: {e}")
+            return Response(
+                {'error': f'CLIP processing failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class MeViewSet(viewsets.ViewSet):
@@ -33,6 +155,22 @@ class MeViewSet(viewsets.ViewSet):
     def preferences(self, request):
         profile = services.update_profile_preferences(user=request.user, patch=request.data)
         return Response(ProfileSerializer(profile).data)
+
+    @action(detail=False, methods=["get"])
+    def aggregated_preferences(self, request):
+        """
+        Get comprehensive user preference profile from all sources:
+        - Taste preferences
+        - Allergies & disliked ingredients
+        - Favorite cuisines
+        - Inferred food interests from gallery
+        - Confidence scores
+        """
+        from recommendation_system.preference_aggregator import UserPreferenceAggregator
+
+        aggregator = UserPreferenceAggregator(request.user)
+        profile = aggregator.get_aggregated_profile()
+        return Response(profile)
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):

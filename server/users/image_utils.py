@@ -1,33 +1,38 @@
+import logging
+import os
 from urllib.parse import unquote, urlparse
 from config.settings import AWS_STORAGE_BUCKET_NAME, S3_CLIENT
 import torch
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 from io import BytesIO
+from .foodlist_matcher import FoodListMatcher
+
+logger = logging.getLogger(__name__)
 import numpy as np
 
 # =====================
 # Setup
 # =====================
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model_name = "openai/clip-vit-base-patch32"
-model = CLIPModel.from_pretrained(model_name).to(device)
-processor = CLIPProcessor.from_pretrained(model_name)
+ENABLE_CLIP_LABELING = os.getenv('ENABLE_CLIP_LABELING', 'true').lower() == 'true'
 
-DEFAULT_FOOD_CATEGORIES: list[str] = [
-    "한식 Korean food",
-    "일식 Japanese food",
-    "중식 Chinese food",
-    "이탈리안 Italian food",
-    "멕시칸 Mexican food",
-    "인도 Indian food",
-    "아메리칸 American food",
-    "태국 Thai food",
-    "지중해 Mediterranean food",
-    "프렌치 French food",
-    "베트남 Vietnamese food",
-    "스페인 Spanish food",
-]
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = None
+processor = None
+foodlist_matcher = None
+
+if ENABLE_CLIP_LABELING:
+    try:
+        model_name = "openai/clip-vit-base-patch32"
+        model = CLIPModel.from_pretrained(model_name).to(device)
+        processor = CLIPProcessor.from_pretrained(model_name)
+        foodlist_matcher = FoodListMatcher()
+        logger.info("CLIP model and food list matcher initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize CLIP model: {e}. CLIP labeling will be disabled.")
+        ENABLE_CLIP_LABELING = False
+else:
+    logger.info("CLIP labeling is disabled")
 
 def _extract_s3_key(url: str) -> str:
     parsed = urlparse(url)
@@ -46,7 +51,18 @@ def _read_image_from_s3(url: str) -> bytes:
     return image_bytes
 
 def _get_food_categories() -> list[str]:
-    return DEFAULT_FOOD_CATEGORIES
+    """Get food categories from foodlist_matcher"""
+    if foodlist_matcher is None:
+        logger.warning("FoodListMatcher not initialized, returning empty categories")
+        return []
+
+    try:
+        # Get all unique food names from foodlist as categories
+        categories = foodlist_matcher.food_names
+        return categories if categories else []
+    except Exception as e:
+        logger.error(f"Error getting food categories: {e}")
+        return []
 
 
 def _predict_category_from_bytes(image_bytes: bytes, categories: list[str]) -> tuple[str, float]:
@@ -76,6 +92,7 @@ def _predict_category_from_bytes(image_bytes: bytes, categories: list[str]) -> t
     return categories[best_idx], probs[0][best_idx].item()
 
 def get_food_image_category(url: str) -> tuple[str, float]:
+    """Legacy function: returns top 1 category"""
     image_bytes = _read_image_from_s3(url)
     food_categories = _get_food_categories()
     return _predict_category_from_bytes(image_bytes, food_categories)
@@ -117,3 +134,114 @@ def normalize_to_onboarding_category(label: str) -> tuple[str, str]:
     if any(k in t for k in ['베이커리','디저트','카페','bakery','dessert','cafe']):
         return ('american','아메리칸')
     return ("other", "기타")
+
+def get_food_image_with_alternatives_from_bytes(image_bytes: bytes) -> dict:
+    """
+    Get food category with top-5 alternatives from foodlist.json using raw image bytes
+
+    Returns:
+        {
+            'primary_label': '치킨',
+            'confidence': 0.95,
+            'alternatives': [
+                {'name': '닭다리', 'confidence': 0.85},
+                {'name': '튀김', 'confidence': 0.75},
+                ...
+            ],
+            'clip_prediction': '치킨',
+            'clip_confidence': 0.92
+        }
+    """
+    # If CLIP labeling is disabled, return empty result
+    if not ENABLE_CLIP_LABELING or model is None or processor is None or foodlist_matcher is None:
+        logger.debug("CLIP labeling is disabled")
+        return {
+            'primary_label': '',
+            'confidence': 0.0,
+            'alternatives': [],
+            'error': 'CLIP labeling is disabled'
+        }
+
+    try:
+        # Open image from bytes
+        food_categories = _get_food_categories()
+
+        # Get top category from CLIP
+        predicted_label, confidence = _predict_category_from_bytes(image_bytes, food_categories)
+
+        # Find best matches from foodlist.json
+        alternatives = foodlist_matcher.find_best_matches(predicted_label, top_k=5)
+
+        logger.info(f"Categorized image: primary={alternatives[0]['name']}, confidence={alternatives[0]['confidence']:.2f}")
+
+        return {
+            'primary_label': alternatives[0]['name'],  # Best match from official list
+            'confidence': alternatives[0]['confidence'],
+            'alternatives': alternatives[1:],  # Next 4 alternatives
+            'clip_prediction': predicted_label,  # Original CLIP output (for debug)
+            'clip_confidence': confidence  # CLIP confidence (for debug)
+        }
+    except Exception as e:
+        logger.error(f"Error in get_food_image_with_alternatives_from_bytes: {e}")
+        return {
+            'primary_label': '',
+            'confidence': 0.0,
+            'alternatives': [],
+            'error': str(e)
+        }
+
+
+def get_food_image_with_alternatives(url: str) -> dict:
+    """
+    Get food category with top-5 alternatives from foodlist.json
+
+    Returns:
+        {
+            'primary_label': '치킨',
+            'confidence': 0.95,
+            'alternatives': [
+                {'name': '닭다리', 'confidence': 0.85},
+                {'name': '튀김', 'confidence': 0.75},
+                ...
+            ],
+            'clip_prediction': '치킨',  # Original CLIP output
+            'clip_confidence': 0.92     # CLIP confidence
+        }
+    """
+    # If CLIP labeling is disabled, return empty result
+    if not ENABLE_CLIP_LABELING or model is None or processor is None or foodlist_matcher is None:
+        logger.debug("CLIP labeling is disabled")
+        return {
+            'primary_label': '',
+            'confidence': 0.0,
+            'alternatives': [],
+            'error': 'CLIP labeling is disabled'
+        }
+
+    try:
+        image_bytes = _read_image_from_s3(url)
+        food_categories = _get_food_categories()
+
+        # Get top category from CLIP
+        predicted_label, confidence = _predict_category_from_bytes(image_bytes, food_categories)
+
+        # Find best matches from foodlist.json
+        alternatives = foodlist_matcher.find_best_matches(predicted_label, top_k=5)
+
+        logger.info(f"Categorized image: primary={alternatives[0]['name']}, confidence={alternatives[0]['confidence']:.2f}")
+
+        return {
+            'primary_label': alternatives[0]['name'],  # Best match from official list
+            'confidence': alternatives[0]['confidence'],
+            'alternatives': alternatives[1:],  # Next 4 alternatives
+            'clip_prediction': predicted_label,  # Original CLIP output (for debug)
+            'clip_confidence': confidence  # CLIP confidence (for debug)
+        }
+    except Exception as e:
+        logger.error(f"Error in get_food_image_with_alternatives: {e}")
+        return {
+            'primary_label': '',
+            'confidence': 0.0,
+            'alternatives': [],
+            'error': str(e)
+        }

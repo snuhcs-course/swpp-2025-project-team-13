@@ -79,7 +79,24 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
 
 
 class UserGalleryImageSerializer(serializers.ModelSerializer):
+    """Serializer for user gallery images with AI-inferred labels and alternatives"""
+
     class Meta:
         model = UserGalleryImage
-        fields = ("id", "user", "image_url", "created_at", "local_uri")
-        read_only_fields = ("created_at",)
+        fields = [
+            'id',
+            'image_url',
+            'ai_label',
+            'category_tag',
+            'label_alternatives',
+            'label_confidence',
+            'label_manually_edited',
+            'created_at',
+            'local_uri',
+        ]
+        read_only_fields = [
+            'label_alternatives',
+            'label_confidence',
+            'created_at',
+            'label_manually_edited',
+        ]

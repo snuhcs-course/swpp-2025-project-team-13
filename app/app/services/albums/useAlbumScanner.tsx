@@ -28,7 +28,7 @@ export function useAlbumScanner() {
         } catch (error) {
             console.log('Error trying to send image to S3: ', error);
         }
-        return photoUrl;
+        return { photoUrl, imageBlob: blob };
     }
 
     async function processImage(album: MediaLibrary.Album, asset: MediaLibrary.Asset, onFoodFound: (asset: MediaLibrary.Asset) => void) {
@@ -37,12 +37,12 @@ export function useAlbumScanner() {
             return;
         }
 
-        const photoUrl = await sendImageToS3(album.title, asset);
+        const { photoUrl, imageBlob } = await sendImageToS3(album.title, asset);
         if (photoUrl == "") {
             return;
         }
 
-        const response = await api.uploadPhoto(photoUrl, asset.uri);
+        const response = await api.uploadPhoto(photoUrl, asset.uri, imageBlob);
         if (response.ok) {
             console.log("Sent photo url to server");
             onFoodFound(asset);
@@ -67,7 +67,7 @@ export function useAlbumScanner() {
             hasNextPage = result.hasNextPage;
 
             for (const asset of result.assets) {
-                processImage(album, asset, onFoodFound);
+                await processImage(album, asset, onFoodFound);
             }
         }
     }
