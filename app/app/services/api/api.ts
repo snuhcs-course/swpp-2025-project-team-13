@@ -21,7 +21,7 @@ import type {
  */
 export const DEFAULT_API_CONFIG: ApiConfig = {
   url: Config.API_URL,
-  timeout: 10000,
+  timeout: 60000, // 60 seconds - recommendation API processes 695 menus with embeddings + OpenAI explanations (takes ~45-50s)
 }
 
 /**
@@ -418,11 +418,191 @@ export class Api {
     }
 
     const response = await this.apisauce.post('/recommendation/recommend/menu/', requestData)
-    
+
     if (response.ok) {
       return response.data as MenuRecommendationResponse
     } else {
       throw new Error((response.data as any)?.error || 'Failed to request menu recommendations')
+    }
+  }
+
+  /**
+   * Stream menu recommendations one by one as they are processed by the backend
+   * Returns an async iterator that yields items as they arrive
+   */
+  async *streamMenuRecommendations(userLocation: [number, number], options?: {
+    queryText?: string
+    maxResults?: number
+  }) {
+    // Ensure CSRF token is set up
+    const csrfRes = await this.getCsrf()
+
+    if (__DEV__) {
+      console.log('🔐 CSRF Response:', {
+        ok: csrfRes.ok,
+        status: csrfRes.status,
+        hasData: !!csrfRes.data,
+        dataKeys: csrfRes.data ? Object.keys(csrfRes.data) : [],
+      })
+    }
+
+    // Get the CSRF token from apisauce headers
+    let csrfToken = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+
+    if (!csrfToken) {
+      // Try to get from response data directly
+      const data: any = csrfRes.data
+      if (data?.csrfToken) {
+        csrfToken = data.csrfToken
+        if (__DEV__) {
+          console.log('✅ Got CSRF token from response data:', csrfToken)
+        }
+      } else {
+        throw new Error('Failed to obtain CSRF token for streaming request')
+      }
+    } else {
+      if (__DEV__) {
+        console.log('🔑 CSRF Token from apisauce headers:', csrfToken)
+      }
+    }
+
+    // Include CSRF token in request body as well as headers
+    // (Django accepts CSRF token via header OR body)
+    const requestData = {
+      user_location: userLocation,
+      csrfmiddlewaretoken: csrfToken,
+      ...options
+    }
+
+    try {
+      const headers: any = {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+        'Accept': 'application/x-ndjson',
+      }
+
+      if (__DEV__) {
+        console.log('📡 Streaming request starting for:', {
+          location: userLocation,
+          csrfToken: csrfToken ? `${csrfToken.substring(0, 10)}...` : 'NOT SET',
+          headers,
+          requestBody: JSON.stringify(requestData),
+          options,
+        })
+      }
+
+      const response = await fetch(`${this.config.url}/recommendation/recommend/menu/`, {
+        method: 'POST',
+        headers,
+        credentials: 'include', // Automatically includes session cookies
+        body: JSON.stringify(requestData),
+      })
+
+      if (__DEV__) {
+        console.log(`📥 Streaming response received:`, {
+          status: response.status,
+          ok: response.ok,
+          statusText: response.statusText,
+          contentType: response.headers.get('content-type'),
+          contentLength: response.headers.get('content-length'),
+          cacheControl: response.headers.get('cache-control'),
+        })
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`❌ HTTP ${response.status}: ${errorText}`)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+
+      // Check if response has a body
+      if (!response.body) {
+        console.warn(`⚠️ Response body is null, trying text-based streaming fallback`)
+
+        // Fallback: Try reading as text if body is null
+        const text = await response.text()
+        if (!text) {
+          console.error(`❌ No response content! Status: ${response.status}`)
+          throw new Error('No response content - server may have rejected request')
+        }
+
+        if (__DEV__) {
+          console.log(`📄 Got response as text (${text.length} chars)`)
+        }
+
+        // Parse NDJSON from text
+        const lines = text.split('\n')
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed) {
+            try {
+              const data = JSON.parse(trimmed)
+              if (__DEV__) {
+                if (data.type === 'metadata') {
+                  console.log(`📊 Streaming metadata: ${data.total_results} results expected`)
+                } else if (data.type === 'result') {
+                  console.log(`🍽️ Streamed menu: ${data.item?.menu_name}`)
+                }
+              }
+              yield data
+            } catch (e) {
+              console.warn('⚠️ Failed to parse line:', trimmed, e)
+            }
+          }
+        }
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        try {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+
+          for (let i = 0; i < lines.length - 1; i++) {
+            const line = lines[i].trim()
+            if (line) {
+              try {
+                const data = JSON.parse(line)
+                if (__DEV__) {
+                  if (data.type === 'metadata') {
+                    console.log(`📊 Streaming metadata: ${data.total_results} results expected`)
+                  } else if (data.type === 'result') {
+                    console.log(`🍽️ Streamed menu: ${data.item?.menu_name}`)
+                  }
+                }
+                yield data
+              } catch (e) {
+                console.warn('⚠️ Failed to parse streaming response line:', line, e)
+              }
+            }
+          }
+
+          buffer = lines[lines.length - 1]
+        } catch (readError) {
+          console.error('❌ Error reading from stream:', readError)
+          throw readError
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer)
+          yield data
+        } catch (e) {
+          console.warn('⚠️ Failed to parse final streaming response:', buffer, e)
+        }
+      }
+    } catch (error) {
+      console.error('❌ Streaming request error:', error)
+      throw new Error(`Streaming request failed: ${error}`)
     }
   }
 

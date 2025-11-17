@@ -17,6 +17,7 @@ import { api } from "../services/api"
 interface PreferencesModalProps {
   visible: boolean
   onClose: () => void
+  onPreferencesSaved?: () => void
 }
 
 interface UserPreferences {
@@ -71,6 +72,7 @@ const CUISINES = [
 export const PreferencesModal: React.FC<PreferencesModalProps> = ({
   visible,
   onClose,
+  onPreferencesSaved,
 }) => {
   const [preferences, setPreferences] = useState<UserPreferences>({
     spicy_level: 5,
@@ -110,6 +112,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
       const response = await api.updatePreferences(preferences)
       if (response.ok) {
         onClose()
+        onPreferencesSaved?.()
       } else {
         console.error("Failed to save preferences:", response.problem)
       }

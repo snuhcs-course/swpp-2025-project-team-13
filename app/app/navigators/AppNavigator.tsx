@@ -59,19 +59,62 @@ export type AppStackScreenProps<T extends keyof AppStackParamList> = NativeStack
 // Documentation: https://reactnavigation.org/docs/stack-navigator/
 const Stack = createNativeStackNavigator<AppStackParamList>()
 
+// Auth Stack - for Welcome, Login, SignUp screens
+const AuthStack = observer(function AuthStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{ headerShown: false, navigationBarColor: colors.background }}
+      initialRouteName="Welcome"
+    >
+      <Stack.Screen name="Welcome" component={Screens.WelcomeScreen} />
+      <Stack.Screen name="Login" component={Screens.LoginScreen} />
+      <Stack.Screen name="SignUp" component={Screens.SignUpScreen} />
+      <Stack.Screen name="Onboarding" component={Screens.OnboardingScreen} />
+    </Stack.Navigator>
+  )
+})
+
+// App Stack - for logged in user screens
+const MainAppStack = observer(function MainAppStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{ headerShown: false, navigationBarColor: colors.background }}
+      initialRouteName="Foodigram"
+    >
+      <Stack.Screen
+        name="Foodigram"
+        component={Screens.FoodigramScreen}
+        options={{ animation: 'none' }}
+      />
+      <Stack.Screen
+        name="Scrap"
+        component={Screens.ScrapScreen}
+        options={{ animation: 'none' }}
+      />
+      <Stack.Screen
+        name="Profile"
+        component={Screens.ProfileScreen}
+        options={{ animation: 'none' }}
+      />
+      {/** 🔥 Your screens go here */}
+      {/* IGNITE_GENERATOR_ANCHOR_APP_STACK_SCREENS */}
+    </Stack.Navigator>
+  )
+})
+
 const AppStack = observer(function AppStack() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
 
   useEffect(() => {
     async function checkLoginStatus() {
       const loginStatus = await storage.loadString("IS_LOGGED_IN")
-      
+
       if (loginStatus === "true") {
         // If IS_LOGGED_IN flag exists, verify if the actual session is valid
         try {
           await api.getCsrf() // Get CSRF token first
           const response = await api.me() // Verify session with actual API call
-          
+
           if (response.ok) {
             // Session is valid
             setIsLoggedIn(true)
@@ -97,34 +140,8 @@ const AppStack = observer(function AppStack() {
     return null
   }
 
-  return (
-    <Stack.Navigator
-      screenOptions={{ headerShown: false, navigationBarColor: colors.background }}
-      initialRouteName={isLoggedIn ? "Foodigram" : "Welcome"}
-    >
-          <Stack.Screen name="Welcome" component={Screens.WelcomeScreen} />
-          <Stack.Screen name="Login" component={Screens.LoginScreen} />
-          <Stack.Screen name="SignUp" component={Screens.SignUpScreen} />
-          <Stack.Screen name="Onboarding" component={Screens.OnboardingScreen} />
-          <Stack.Screen 
-            name="Foodigram" 
-            component={Screens.FoodigramScreen} 
-            options={{ animation: 'none' }}
-          />
-          <Stack.Screen 
-            name="Scrap" 
-            component={Screens.ScrapScreen} 
-            options={{ animation: 'none' }}
-          />
-          <Stack.Screen 
-            name="Profile" 
-            component={Screens.ProfileScreen} 
-            options={{ animation: 'none' }}
-          />
-      {/** 🔥 Your screens go here */}
-      {/* IGNITE_GENERATOR_ANCHOR_APP_STACK_SCREENS */}
-    </Stack.Navigator>
-  )
+  // Render different stacks based on login status - prevents back navigation to auth screens
+  return isLoggedIn ? <MainAppStack /> : <AuthStack />
 })
 
 export interface NavigationProps

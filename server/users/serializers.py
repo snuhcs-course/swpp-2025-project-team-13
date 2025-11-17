@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Profile, Follow, UserScrap, UserPreference, UserGalleryImage
+from .models import User, Profile, Follow, UserScrap, UserPreference, UserGalleryImage, UserInteraction, RLWeightHistory
 from restaurant.serializers import RestaurantSerializer
 
 
@@ -100,3 +100,35 @@ class UserGalleryImageSerializer(serializers.ModelSerializer):
             'created_at',
             'label_manually_edited',
         ]
+
+
+class UserInteractionSerializer(serializers.ModelSerializer):
+    """Serializer for user interactions (for RL reward learning)"""
+
+    class Meta:
+        model = UserInteraction
+        fields = [
+            'id',
+            'menu_id',
+            'restaurant_id',
+            'interaction_type',
+            'reward_value',
+            'context_query',
+            'timestamp',
+        ]
+        read_only_fields = ['id', 'timestamp']
+
+
+class RLWeightHistorySerializer(serializers.ModelSerializer):
+    """Serializer for RL weight history tracking"""
+
+    class Meta:
+        model = RLWeightHistory
+        fields = [
+            'id',
+            'weights',
+            'update_cycle',
+            'created_at',
+            'update_method',
+        ]
+        read_only_fields = ['id', 'created_at']

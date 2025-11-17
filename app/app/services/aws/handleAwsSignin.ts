@@ -1,5 +1,4 @@
-import { signIn} from 'aws-amplify/auth';
-import { signOut } from 'aws-amplify/auth';
+import { signIn, signOut } from 'aws-amplify/auth';
 
 
 export async function handleSignIn(username: string, password: string) {

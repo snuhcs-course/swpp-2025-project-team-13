@@ -17,9 +17,9 @@ export function useAlbumScanner() {
         const response = await fetch(asset.uri);
         const blob = await response.blob();
 
-        let photoUrl: string = "";
+        let photoUrl = "";
         try {
-            let s3_result = await uploadData({
+            const s3_result = await uploadData({
                 path: ({ identityId }) => `protected/${identityId}/album/${albumTitle}/${filename}`,
                 data: blob,
             }).result;
@@ -52,7 +52,7 @@ export function useAlbumScanner() {
     }
 
     async function scanAlbum(album: MediaLibrary.Album, onFoodFound: (asset: MediaLibrary.Asset) => void) {
-        let endCursor = undefined;
+        let endCursor;
         let hasNextPage = true;
 
         console.log(`Processing album: ${album.title}`);

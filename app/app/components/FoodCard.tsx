@@ -329,9 +329,9 @@ const $allergensContentContainer: ViewStyle = {
 }
 
 const $allergenBadge: ViewStyle = {
-  //backgroundColor: colors.palette.neutral100,
-  //borderWidth: 1,
-  //borderColor: colors.palette.neutral300,
+  // backgroundColor: colors.palette.neutral100,
+  // borderWidth: 1,
+  // borderColor: colors.palette.neutral300,
   paddingHorizontal: spacing.sm,
   paddingVertical: spacing.xs,
   borderRadius: 12,

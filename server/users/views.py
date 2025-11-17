@@ -3,8 +3,8 @@ from rest_framework.decorators import action, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import User, Follow, UserScrap, UserPreference, UserGalleryImage
-from .serializers import UserSerializer, ProfileSerializer, FollowSerializer, UserScrapSerializer, UserPreferenceSerializer, UserGalleryImageSerializer
+from .models import User, Follow, UserScrap, UserPreference, UserGalleryImage, UserInteraction, RLWeightHistory
+from .serializers import UserSerializer, ProfileSerializer, FollowSerializer, UserScrapSerializer, UserPreferenceSerializer, UserGalleryImageSerializer, UserInteractionSerializer, RLWeightHistorySerializer
 from restaurant.models import Restaurant
 from . import services
 import logging
@@ -221,67 +221,102 @@ class ScrapViewSet(viewsets.GenericViewSet):
     """음식점 스크랩 관리 API"""
     permission_classes = [IsAuthenticated]
     serializer_class = UserScrapSerializer
-    
+
     def get_queryset(self):
         """현재 유저의 스크랩만 조회"""
         return UserScrap.objects.filter(user=self.request.user).select_related('restaurant')
-    
+
     def list(self, request):
         """내 스크랩 목록 조회"""
         scraps = self.get_queryset().order_by('-created_at')
         serializer = self.get_serializer(scraps, many=True)
         return Response(serializer.data)
-    
+
     def create(self, request):
         """스크랩 추가"""
         restaurant_id = request.data.get('restaurant_id')
-        
+
         if not restaurant_id:
             return Response(
                 {"error": "restaurant_id is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # 음식점 존재 확인
         restaurant = get_object_or_404(Restaurant, id=restaurant_id)
-        
+
         # 이미 스크랩했는지 확인
         if UserScrap.objects.filter(user=request.user, restaurant=restaurant).exists():
             return Response(
                 {"error": "Already scrapped"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # 스크랩 생성
         scrap = UserScrap.objects.create(user=request.user, restaurant=restaurant)
+
+        # Log interaction for RL reward learning
+        context_query = request.data.get('context_query', '')
+        UserInteraction.objects.create(
+            user=request.user,
+            restaurant_id=restaurant_id,
+            interaction_type='scrap',
+            reward_value=1.0,
+            context_query=context_query
+        )
+        logger.info(f"User {request.user.id} scrapped restaurant {restaurant_id} - logged interaction")
+
         serializer = self.get_serializer(scrap)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
+
     def destroy(self, request, pk=None):
         """스크랩 삭제"""
         scrap = get_object_or_404(self.get_queryset(), pk=pk)
+        restaurant_id = scrap.restaurant_id
+
+        # Log interaction (negative reward for removing a scrap)
+        UserInteraction.objects.create(
+            user=request.user,
+            restaurant_id=restaurant_id,
+            interaction_type='hide',
+            reward_value=-1.0,
+            context_query='scrap_removed'
+        )
+        logger.info(f"User {request.user.id} removed scrap for restaurant {restaurant_id} - logged interaction")
+
         scrap.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
+
     @action(detail=False, methods=['post'], url_path='toggle')
     def toggle(self, request):
         """스크랩 토글 (있으면 삭제, 없으면 추가)"""
         restaurant_id = request.data.get('restaurant_id')
-        
+
         if not restaurant_id:
             return Response(
                 {"error": "restaurant_id is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         restaurant = get_object_or_404(Restaurant, id=restaurant_id)
-        
+
         # 이미 스크랩했는지 확인
         scrap = UserScrap.objects.filter(user=request.user, restaurant=restaurant).first()
-        
+
         if scrap:
             # 스크랩 해제
             scrap.delete()
+
+            # Log negative interaction
+            UserInteraction.objects.create(
+                user=request.user,
+                restaurant_id=restaurant_id,
+                interaction_type='hide',
+                reward_value=-1.0,
+                context_query='scrap_toggled_off'
+            )
+            logger.info(f"User {request.user.id} toggled off scrap for restaurant {restaurant_id} - logged interaction")
+
             return Response(
                 {"scrapped": False, "message": "Scrap removed"},
                 status=status.HTTP_200_OK
@@ -289,6 +324,18 @@ class ScrapViewSet(viewsets.GenericViewSet):
         else:
             # 스크랩 추가
             scrap = UserScrap.objects.create(user=request.user, restaurant=restaurant)
+
+            # Log positive interaction
+            context_query = request.data.get('context_query', '')
+            UserInteraction.objects.create(
+                user=request.user,
+                restaurant_id=restaurant_id,
+                interaction_type='scrap',
+                reward_value=1.0,
+                context_query=context_query
+            )
+            logger.info(f"User {request.user.id} toggled on scrap for restaurant {restaurant_id} - logged interaction")
+
             serializer = self.get_serializer(scrap)
             return Response(
                 {"scrapped": True, "data": serializer.data},
@@ -350,16 +397,194 @@ class OnboardingViewSet(viewsets.GenericViewSet):
     def update_preferences(self, request):
         """취향 설정 부분 업데이트"""
         preference = UserPreference.objects.filter(user=request.user).first()
-        
+
         if not preference:
             return Response(
                 {"error": "No preferences found. Please create preferences first."},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         serializer = self.get_serializer(preference, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class InteractionViewSet(viewsets.GenericViewSet):
+    """API for logging user interactions (clicks, scraps, hides) for RL reward learning"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserInteractionSerializer
+
+    def get_queryset(self):
+        """Get interactions for current user"""
+        return UserInteraction.objects.filter(user=self.request.user)
+
+    def list(self, request):
+        """List recent interactions for current user"""
+        interactions = self.get_queryset().order_by('-timestamp')[:100]  # Last 100 interactions
+        serializer = self.get_serializer(interactions, many=True)
+        return Response(serializer.data)
+
+    def create(self, request):
+        """Log a user interaction"""
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def log_scrap(self, request):
+        """Log a scrap interaction (+1.0 reward)"""
+        restaurant_id = request.data.get('restaurant_id')
+        if not restaurant_id:
+            return Response(
+                {"error": "restaurant_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        interaction = UserInteraction.objects.create(
+            user=request.user,
+            restaurant_id=restaurant_id,
+            interaction_type='scrap',
+            reward_value=1.0,
+            context_query=request.data.get('context_query', '')
+        )
+        serializer = self.get_serializer(interaction)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def log_click(self, request):
+        """Log a menu click interaction (+0.5 reward)"""
+        menu_id = request.data.get('menu_id')
+        if not menu_id:
+            return Response(
+                {"error": "menu_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        interaction = UserInteraction.objects.create(
+            user=request.user,
+            menu_id=menu_id,
+            interaction_type='click',
+            reward_value=0.5,
+            context_query=request.data.get('context_query', '')
+        )
+        serializer = self.get_serializer(interaction)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def log_hide(self, request):
+        """Log a hide/swipe interaction (-1.0 reward)"""
+        menu_id = request.data.get('menu_id')
+        restaurant_id = request.data.get('restaurant_id')
+
+        if not menu_id and not restaurant_id:
+            return Response(
+                {"error": "menu_id or restaurant_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        interaction = UserInteraction.objects.create(
+            user=request.user,
+            menu_id=menu_id,
+            restaurant_id=restaurant_id,
+            interaction_type='hide',
+            reward_value=-1.0,
+            context_query=request.data.get('context_query', '')
+        )
+        serializer = self.get_serializer(interaction)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def log_allergic_reaction(self, request):
+        """Log allergic reaction (-2.0 reward)"""
+        menu_id = request.data.get('menu_id')
+        if not menu_id:
+            return Response(
+                {"error": "menu_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        interaction = UserInteraction.objects.create(
+            user=request.user,
+            menu_id=menu_id,
+            interaction_type='allergic_reaction',
+            reward_value=-2.0,
+            context_query=request.data.get('context_query', '')
+        )
+        serializer = self.get_serializer(interaction)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class RLWeightViewSet(viewsets.GenericViewSet):
+    """API for managing RL weight vectors per user"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = RLWeightHistorySerializer
+
+    def get_queryset(self):
+        """Get weight history for current user"""
+        return RLWeightHistory.objects.filter(user=self.request.user)
+
+    def list(self, request):
+        """List weight history for current user"""
+        weights = self.get_queryset().order_by('-created_at')
+        serializer = self.get_serializer(weights, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """Get the current RL weight vector for the user"""
+        # Get the most recent weight vector
+        latest_weight = self.get_queryset().first()
+        if latest_weight:
+            serializer = self.get_serializer(latest_weight)
+            return Response(serializer.data)
+        else:
+            # Return default weights if no history exists
+            default_weights = [0.65, 0.20, 0.10, 0.05, 0.10, 0.0, 0.0]
+            return Response({
+                'weights': default_weights,
+                'update_cycle': 0,
+                'update_method': 'default',
+                'message': 'No custom weights yet, using defaults'
+            })
+
+    @action(detail=False, methods=['post'], url_path='update_weights')
+    def update_weights(self, request):
+        """Create a new weight vector update"""
+        weights = request.data.get('weights')
+        update_cycle = request.data.get('update_cycle', 0)
+        update_method = request.data.get('update_method', 'linucb')
+
+        if not weights or not isinstance(weights, list):
+            return Response(
+                {"error": "weights must be a list of numbers"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(weights) != 7:
+            return Response(
+                {"error": "weights must have exactly 7 elements"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create new weight history entry
+        weight_entry = RLWeightHistory.objects.create(
+            user=request.user,
+            weights=weights,
+            update_cycle=update_cycle,
+            update_method=update_method
+        )
+
+        # Also update the user preference with the current weights
+        preference = UserPreference.objects.filter(user=request.user).first()
+        if preference:
+            preference.rl_weight_vector = weights
+            preference.save()
+
+        serializer = self.get_serializer(weight_entry)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

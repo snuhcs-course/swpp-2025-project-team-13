@@ -43,6 +43,13 @@ class UserPreference(models.Model):
     allergies = models.JSONField(default=list, blank=True)
     disliked_ingredients = models.JSONField(default=list, blank=True)
     favorite_cuisines = models.JSONField(default=list, blank=True)
+    # RL weight vector for scoring function: [w1, w2, w3, w4, w5, w6, w7]
+    # Default weights from current HybridScorer: [0.65, 0.20, 0.10, 0.05, 0.10, 0.0, 0.0]
+    rl_weight_vector = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="RL-optimized weights for [text_sim, popularity, distance, price, freshness, query_sim, taste_align]"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -97,6 +104,62 @@ class UserScrap(models.Model):
         indexes = [
             models.Index(fields=["user", "restaurant"]),
         ]
-    
+
     def __str__(self):
         return f"{self.user.username} → {self.restaurant.name}"
+
+
+class UserInteraction(models.Model):
+    """Track user interactions with menus and restaurants for RL reward learning."""
+    INTERACTION_TYPES = [
+        ('scrap', 'User saved/scrapped a restaurant'),
+        ('click', 'User clicked/opened a menu item'),
+        ('view', 'User viewed a menu item'),
+        ('hide', 'User swiped to hide a recommendation'),
+        ('expand', 'User expanded/opened detail page'),
+        ('allergic_reaction', 'User reported negative reaction'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="interactions")
+    menu_id = models.IntegerField(null=True, blank=True, help_text="Menu ID from recommendation system")
+    restaurant_id = models.IntegerField(null=True, blank=True, help_text="Restaurant ID from recommendation system")
+    interaction_type = models.CharField(max_length=20, choices=INTERACTION_TYPES)
+    reward_value = models.FloatField(help_text="Reward signal: +1.0 scrap, +0.5 click, -1.0 hide, etc.")
+    context_query = models.TextField(blank=True, help_text="Natural language query that led to this interaction")
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "timestamp"]),
+            models.Index(fields=["user", "interaction_type"]),
+            models.Index(fields=["timestamp"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} → {self.interaction_type} (+{self.reward_value})"
+
+
+class RLWeightHistory(models.Model):
+    """Store RL weight vector history for each user."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="rl_weight_history")
+    # Weights for: text_similarity, popularity, distance, price, freshness, query_similarity, taste_alignment
+    weights = models.JSONField(
+        help_text="Weight vector [w1, w2, w3, w4, w5, w6, w7] for scoring function"
+    )
+    update_cycle = models.IntegerField(help_text="Cycle number (0, 1, 2, ...)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    update_method = models.CharField(
+        max_length=50,
+        default='linucb',
+        choices=[('linucb', 'LinUCB'), ('thompson', 'Thompson Sampling'), ('policy_gradient', 'Policy Gradient')]
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["user", "update_cycle"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - Cycle {self.update_cycle}"

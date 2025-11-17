@@ -120,6 +120,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
       setSelectedImageIds(new Set())
       setIsSelectMode(false)
       setDeleteConfirmationVisible(false)
+      // Signal FoodigramScreen to refresh recommendations (user updated images)
+      navigation.navigate("Foodigram", {
+        refreshRecommendations: true,
+        refreshReason: "food_image_deleted"
+      } as any)
     } catch (e) {
       Alert.alert("오류", "사진 삭제 실패")
       setDeleteConfirmationVisible(false)
@@ -274,6 +279,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
                               await api.updateImageLabel(item.id, newLabel)
                               // Refresh photos list after updating label
                               await getUserPhotos()
+                              // Signal FoodigramScreen to refresh recommendations (user updated image label)
+                              navigation.navigate("Foodigram", {
+                                refreshRecommendations: true,
+                                refreshReason: "food_label_changed"
+                              } as any)
                             } catch (e) {
                               Alert.alert("오류", "라벨 업데이트 실패")
                             }
@@ -426,6 +436,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
       <PreferencesModal
         visible={isPreferencesModalVisible}
         onClose={() => setIsPreferencesModalVisible(false)}
+        onPreferencesSaved={() => {
+          // Signal FoodigramScreen to refresh recommendations (user updated preferences)
+          navigation.navigate("Foodigram", {
+            refreshRecommendations: true,
+            refreshReason: "preferences_updated"
+          } as any)
+        }}
       />
 
       {/* Delete Confirmation Dialog */}
