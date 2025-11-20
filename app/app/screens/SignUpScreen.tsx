@@ -3,10 +3,8 @@ import { observer } from "mobx-react-lite"
 import { View, ViewStyle, TextStyle, TouchableOpacity, Alert, TextInput, ScrollView } from "react-native"
 import { Text } from "app/components"
 import { AppStackScreenProps } from "app/navigators"
-import * as storage from "app/utils/storage"
-import { api } from "app/services/api"
+import { userRegistrationFacade } from "app/services/registration"
 import { Eye, EyeOff } from "lucide-react-native"
-import { signUp } from "aws-amplify/auth"
 
 interface SignUpScreenProps extends AppStackScreenProps<"SignUp"> {}
 
@@ -18,40 +16,6 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-
-  type SignUpParameters = {
-    username: string;
-    password: string;
-    email: string;
-  };
-
-  async function handleAwsSignUp({
-    username,
-    password,
-    email,
-  }: SignUpParameters) {
-    try {
-      const { isSignUpComplete, userId, nextStep } = await signUp({
-        username,
-        password,
-        options: {
-          userAttributes: {
-            email,
-          },
-          // optional
-          autoSignIn: true, // or SignInOptions e.g { authFlowType: "USER_SRP_AUTH" }
-        },
-      });
-
-      console.log(`AWS Amplify userId: ${userId}`);
-
-      if (!isSignUpComplete) {
-        throw new Error(`회원가입이 완료되지 않았습니다 - 자동 로그인 문제가 발생하였습니다. 다음 단계: ${JSON.stringify(nextStep)}`);
-      }
-    } catch (error) {
-      console.log('회원가입 에러:', error);
-    }
-  }
 
   async function tryRegister() {
     // Form validation
@@ -79,18 +43,17 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
 
     setIsLoading(true)
     try {
-      // Ensure CSRF cookie is set
-      await api.getCsrf()
-      const res = await api.register(fullName, email, password)
-      handleAwsSignUp({username: fullName, email, password});
-      if (!res.ok) {
-        const errorMessage = (res.data as any)?.detail || "회원가입에 실패하였습니다."
-        Alert.alert("회원가입 실패", errorMessage)
+      const result = await userRegistrationFacade.registerUser({
+        username: fullName,
+        email,
+        password,
+      })
+
+      if (!result.success) {
+        Alert.alert("회원가입 실패", result.errorMessage ?? "회원가입에 실패하였습니다.")
         return
       }
-      
-      // Auto login after successful registration
-      await storage.saveString("IS_LOGGED_IN", "true")
+
       Alert.alert("회원가입 완료", "맛집 여정을 시작해보세요!", [
         { 
           text: "확인", 
