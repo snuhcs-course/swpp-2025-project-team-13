@@ -3,7 +3,7 @@ import { observer } from "mobx-react-lite"
 import { View, ViewStyle, TextStyle, TouchableOpacity, Alert, TextInput, ScrollView } from "react-native"
 import { Text } from "app/components"
 import { AppStackScreenProps } from "app/navigators"
-import { userRegistrationFacade } from "app/services/registration"
+import { userAuthFacade } from "app/services/registration"
 import { Eye, EyeOff } from "lucide-react-native"
 
 interface SignUpScreenProps extends AppStackScreenProps<"SignUp"> {}
@@ -43,7 +43,7 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
 
     setIsLoading(true)
     try {
-      const result = await userRegistrationFacade.registerUser({
+      const result = await userAuthFacade.registerUser({
         username: fullName,
         email,
         password,

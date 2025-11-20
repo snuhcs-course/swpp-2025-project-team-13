@@ -1,8 +1,6 @@
 import { Text } from "app/components"
 import { AppStackScreenProps } from "app/navigators"
-import { api } from "app/services/api"
-import { handleSignIn } from "app/services/aws/handleAwsSignin"
-import * as storage from "app/utils/storage"
+import { userAuthFacade } from "app/services/registration"
 import { Eye, EyeOff } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
 import React, { useState } from "react"
@@ -24,34 +22,13 @@ export const LoginScreen = observer(function LoginScreen({ navigation }: LoginSc
 
     setIsLoading(true)
     try {
-      // CSRF 쿠키 설정
-      await api.getCsrf()
-      const res = await api.login(username, password)
-      if (!res.ok) {
-        const errorMessage = (res.data as any)?.detail || "로그인에 실패했습니다."
-        Alert.alert("로그인 실패", errorMessage)
+      const result = await userAuthFacade.loginUser({ username, password })
+      if (!result.success) {
+        Alert.alert("로그인 실패", result.errorMessage ?? "로그인에 실패했습니다.")
         return
       }
 
-      // aws amplify 로그인
-      await handleSignIn(username, password);
-
-      await storage.saveString("IS_LOGGED_IN", "true")
-
-      // 선호도(설정) 정보 확인
-      try {
-        const preferencesResponse = await api.getPreferences()
-        if (preferencesResponse.ok && preferencesResponse.data) {
-          // 선호도가 있다면 메인 앱으로 이동
-          navigation.replace("Foodigram")
-        } else {
-          // 선호도가 없다면 온보딩 화면으로
-          navigation.replace("Onboarding")
-        }
-      } catch (error) {
-        // 선호도 확인 중 오류 시 온보딩으로 이동
-        navigation.replace("Onboarding")
-      }
+      navigation.replace(result.hasPreferences ? "Foodigram" : "Onboarding")
     } catch (e) {
       Alert.alert("로그인 중 문제가 발생했습니다.")
       console.log(e)
@@ -72,6 +49,7 @@ export const LoginScreen = observer(function LoginScreen({ navigation }: LoginSc
             <Text style={$label}>아이디</Text>
             <TextInput
               style={$input}
+              testID="login-username-input"
               placeholder=""
               placeholderTextColor="#9c5749"
               value={username}
@@ -86,6 +64,7 @@ export const LoginScreen = observer(function LoginScreen({ navigation }: LoginSc
             <View style={$passwordContainer}>
               <TextInput
                 style={$passwordInput}
+                testID="login-password-input"
                 placeholder=""
                 placeholderTextColor="#9c5749"
                 secureTextEntry={!showPassword}
@@ -112,6 +91,7 @@ export const LoginScreen = observer(function LoginScreen({ navigation }: LoginSc
 
           <TouchableOpacity 
             style={[$loginButton, isLoading && $loginButtonDisabled]}
+            testID="login-submit-button"
             onPress={tryLogin}
             disabled={isLoading}
           >

@@ -1,2 +1,2 @@
-export * from "./UserRegistrationFacade"
+export * from "./UserAuthFacade"
 

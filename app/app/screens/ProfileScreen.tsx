@@ -1,6 +1,6 @@
 import { useAlbumScanner } from "app/services/albums/useAlbumScanner"
 import { api } from "app/services/api"
-import * as storage from "app/utils/storage"
+import { userAuthFacade } from "app/services/registration"
 import { Bookmark, Check, Home, Image as ImageIcon, LogOut, Settings, User, UtensilsCrossed } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
 import React, { useEffect, useState, useRef } from "react"
@@ -146,12 +146,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
   const allPhotos = [...userImages, ...scrappedImages]
 
   const logout = async () => {
-    try {
-      await api.logout()
-    } catch (e) {
-      // ignore network errors and continue logout locally
-    }
-    await storage.remove("IS_LOGGED_IN")
+    await userAuthFacade.logoutUser()
     navigation.replace("Welcome")
   }
 
@@ -192,7 +187,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
           </TouchableOpacity>
 =======
         <View style={$profileSectionHorizontal}>
-          <TouchableOpacity onPress={() => logout()}>
+          <TouchableOpacity testID="profile-logout-button" onPress={() => logout()}>
             <Text style={$userNameHorizontal}>{user.name}</Text>
           </TouchableOpacity>
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
