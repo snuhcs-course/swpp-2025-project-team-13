@@ -31,6 +31,7 @@ from .unified_embeddings import (
     calculate_embedding_similarity
 )
 from .rl_scoring import get_rl_scorer, ScoringWeights
+from .scoring_strategy import ScoringContext, HybridScoringStrategy
 # ChromaDB 관련 import (더 이상 사용 안함 - client.py로 대체)
 # from . import EmbeddingService, VectorIndexBuilder, RecommendationEngine
 from users.models import UserPreference, UserGalleryImage, UserScrap
@@ -791,8 +792,9 @@ def recommend_menu(request):
                 'error': f'검색 오류: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        # ===== RL-Enhanced 스코어링 (unified embeddings + RL weights 사용) =====
-        rl_scorer = get_rl_scorer()
+        # ===== Strategy Pattern을 사용한 스코어링 =====
+        # Scoring context 초기화 (자동으로 사용 가능한 최적의 strategy 선택)
+        scoring_context = ScoringContext()
 
         # 사용자 embedding 생성
         user_embedding_aggregator = get_user_embedding_aggregator()
@@ -833,45 +835,21 @@ def recommend_menu(request):
             if 'user_location' in data:
                 user_location = tuple(data['user_location'])
 
-            # RL 점수 계산
-            if rl_scorer:
-                final_score, components = rl_scorer.calculate_menu_score(
-                    menu=menu,
-                    user_prefs=enhanced_onboarding_data,
-                    weights=rl_weights,  # None이면 default weights 사용
-                    user_embedding=user_embedding,
-                    menu_embedding=menu_embedding,
-                    query_context=context_info.get('intent').__dict__ if context_info.get('intent') else None,
-                    user_location=user_location
-                )
-            else:
-                # Fallback: 기존 HybridScorer 사용
-                logger.warning("RLScorer not available, falling back to HybridScorer")
-                scorer = HybridScorer()
-                similarity_score = calculate_menu_similarity(menu, onboarding_data)
+            # Text similarity 계산 (HybridScorer fallback을 위해)
+            similarity_score = calculate_menu_similarity(menu, enhanced_onboarding_data)
 
-                rating_raw = menu.get('rating')
-                rating = float(rating_raw) if rating_raw is not None else 0.0
-
-                review_count_raw = menu.get('review_count')
-                review_count = int(review_count_raw) if review_count_raw is not None else 0
-
-                x_raw = menu.get('x')
-                y_raw = menu.get('y')
-                x = float(x_raw) if x_raw is not None else 0.0
-                y = float(y_raw) if y_raw is not None else 0.0
-
-                item_data = {
-                    'rating': rating,
-                    'review_count': review_count,
-                    'price': menu.get('price', 0),
-                    'coordinates': (x, y),
-                    'keywords': menu.get('keywords', []) if menu.get('keywords') else [],
-                    'has_image': bool(menu.get('images'))
-                }
-
-                final_score = scorer.calculate_hybrid_score(similarity_score, item_data, search_context)
-                components = None
+            # Strategy Pattern을 사용한 점수 계산
+            final_score, components = scoring_context.calculate_score(
+                menu=menu,
+                user_prefs=enhanced_onboarding_data,
+                search_context=search_context,
+                text_similarity=similarity_score,
+                user_embedding=user_embedding,
+                menu_embedding=menu_embedding,
+                query_context=context_info.get('intent').__dict__ if context_info.get('intent') else None,
+                user_location=user_location,
+                weights=rl_weights,
+            )
 
             scored_results.append((menu, final_score, components))
         
@@ -1197,38 +1175,23 @@ def recommend_place(request):
                 'error': f'검색 오류: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        # ===== 하이브리드 스코어링 적용 (기존 유지) =====
-        scorer = HybridScorer()
+        # ===== Strategy Pattern을 사용한 스코어링 =====
+        # Scoring context 초기화 (HybridScoringStrategy 사용, 가게 추천은 기본적으로 Hybrid 방식)
+        scoring_context = ScoringContext(strategy=HybridScoringStrategy())
         scored_results = []
         
         for restaurant in restaurants:
             # 유사도 계산 (가게의 경우 카테고리와 키워드 기반)
             similarity_score = calculate_menu_similarity(restaurant, onboarding_data)
             
-            # 가게 데이터를 HybridScorer 형식으로 변환
-            # Decimal과 None을 안전하게 처리
-            rating_raw = restaurant.get('rating') or restaurant.get('avg_rating')
-            rating = float(rating_raw) if rating_raw is not None else 0.0
+            # Strategy Pattern을 사용한 점수 계산
+            score, _ = scoring_context.calculate_score(
+                menu=restaurant,
+                user_prefs=onboarding_data,
+                search_context=search_context,
+                text_similarity=similarity_score,
+            )
             
-            review_count_raw = restaurant.get('review_count')
-            review_count = int(review_count_raw) if review_count_raw is not None else 0
-            
-            x_raw = restaurant.get('x')
-            y_raw = restaurant.get('y')
-            x = float(x_raw) if x_raw is not None else 0.0
-            y = float(y_raw) if y_raw is not None else 0.0
-            
-            item_data = {
-                'rating': rating,
-                'review_count': review_count,
-                'price': restaurant.get('avg_price', 0),
-                'coordinates': (x, y),
-                'keywords': restaurant.get('keywords', []) if restaurant.get('keywords') else [],
-                'has_image': True  # 가게는 기본적으로 이미지가 있다고 가정
-            }
-            
-            # 하이브리드 점수 계산
-            score = scorer.calculate_hybrid_score(similarity_score, item_data, search_context)
             scored_results.append((restaurant, score))
         
         # MMR 리랭킹 적용 (exploration_preference 사용)
