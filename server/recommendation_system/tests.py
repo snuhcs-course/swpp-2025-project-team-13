@@ -2,6 +2,7 @@ from django.test import TestCase, Client
 from django.http import JsonResponse
 from decimal import Decimal
 from unittest.mock import Mock, patch, MagicMock, PropertyMock
+from unittest import skip
 from rest_framework.test import APIClient
 import json
 import numpy as np
@@ -25,6 +26,12 @@ from .scoring import (
     HybridScorer,
     MMRReranker,
     RecommendationReranker
+)
+from .scoring_strategy import (
+    ScoringStrategy,
+    RLScoringStrategy,
+    HybridScoringStrategy,
+    ScoringContext
 )
 
 
@@ -1054,6 +1061,7 @@ class DataClassTests(TestCase):
         self.assertEqual(len(embeddings), 1)
 
 
+@skip("RecommendationAPIView is deprecated and removed")
 class RecommendationAPITests(TestCase):
     """추천 API 테스트"""
     
@@ -1326,6 +1334,7 @@ class InitModuleTests(TestCase):
         self.assertEqual(results, [])
 
 
+@skip("RecommendationAPIView is deprecated and removed")
 class IntegrationTests(TestCase):
     """통합 테스트"""
     
@@ -1372,8 +1381,19 @@ class IntegrationTests(TestCase):
 
 
 class APIFunctionTests(TestCase):
+    """Tests for current API functions (recommend_menu, recommend_place, health_check)"""
+    
+    def setUp(self):
+        """Set up test fixtures"""
+        from users.models import User
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@test.com',
+            password='testpass123'
+        )
     
     def test_create_sample_request(self):
+        """Test create_sample_request helper function"""
         from .api import create_sample_request
         
         sample = create_sample_request()
@@ -1386,15 +1406,13 @@ class APIFunctionTests(TestCase):
         self.assertEqual(sample['query_type'], 'menu')
         self.assertEqual(len(sample['user_location']), 2)
     
-    @patch('recommendation_system.api.EmbeddingService')
-    @patch('recommendation_system.api.VectorIndexBuilder')
-    @patch('recommendation_system.api.RecommendationEngine')
-    def test_health_check(self, mock_engine, mock_builder, mock_embedding):
+    def test_health_check(self):
+        """Test health check endpoint"""
         from .api import health_check
         from rest_framework.test import APIRequestFactory
         
         factory = APIRequestFactory()
-        request = factory.get('/api/health/')
+        request = factory.get('/api/v1/recommendation/health/')
         
         response = health_check(request)
         
@@ -1402,64 +1420,125 @@ class APIFunctionTests(TestCase):
         self.assertEqual(response.data['status'], 'healthy')
         self.assertEqual(response.data['service'], 'recommendation_system')
     
-    @patch('recommendation_system.api.RecommendationAPIView._search_place_recommendations')
-    @patch('recommendation_system.api.RecommendationAPIView._create_search_context')
-    @patch('recommendation_system.api.RecommendationAPIView._create_user_profile')
-    @patch('recommendation_system.api.RecommendationAPIView._initialize_services')
-    def test_api_view_place_query(self, mock_init, mock_profile, mock_context, mock_search):
-        from .api import RecommendationAPIView
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_menu_unauthenticated(self, mock_recommender):
+        """Test recommend_menu requires authentication"""
+        from .api import recommend_menu
+        from rest_framework.test import APIRequestFactory
         
-        view = RecommendationAPIView()
-        view.embedding_service = Mock()
-        view.recommendation_engine = Mock()
+        factory = APIRequestFactory()
+        request = factory.post('/api/v1/recommendation/recommend/menu/', {
+            'user_location': [127.0, 37.5]
+        }, format='json')
+        request.user = Mock(is_authenticated=False)
         
-        mock_profile.return_value = "사용자 프로필"
-        mock_context.return_value = Mock()
-        mock_search.return_value = []
+        response = recommend_menu(request)
         
-        request = Mock(method='POST')
-        request.body = json.dumps({
-            'user_id': 'test',
-            'user_location': [127.0, 37.5],
-            'query_type': 'place'
-        })
-        
-        response = view.post(request)
-        
-        self.assertEqual(response.status_code, 200)
-        mock_search.assert_called_once()
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('Authentication required', str(response.content))
     
-    @patch('recommendation_system.api.RecommendationAPIView._initialize_services')
-    def test_api_view_invalid_query_type(self, mock_init):
-        from .api import RecommendationAPIView
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_menu_missing_required_field(self, mock_recommender):
+        """Test recommend_menu validates required fields"""
+        from .api import recommend_menu
+        from rest_framework.test import APIRequestFactory
         
-        view = RecommendationAPIView()
-        view.embedding_service = Mock()
-        view.recommendation_engine = Mock()
+        factory = APIRequestFactory()
+        # Create request with empty body (missing user_location)
+        request = factory.post('/api/v1/recommendation/recommend/menu/', 
+                              data=json.dumps({}),
+                              content_type='application/json')
+        request.user = self.user
         
-        request = Mock(method='POST')
-        request.body = json.dumps({
-            'user_id': 'test',
-            'user_location': [127.0, 37.5],
-            'query_type': 'invalid'
-        })
-        
-        response = view.post(request)
+        response = recommend_menu(request)
         
         self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content.decode('utf-8'))
+        self.assertIn('필수 필드 누락', data['error'])
     
-    @patch('recommendation_system.api.RecommendationAPIView._initialize_services')
-    def test_api_view_json_decode_error(self, mock_init):
-        from .api import RecommendationAPIView
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_menu_invalid_json(self, mock_recommender):
+        """Test recommend_menu handles invalid JSON"""
+        from .api import recommend_menu
+        from rest_framework.test import APIRequestFactory
         
-        view = RecommendationAPIView()
+        factory = APIRequestFactory()
+        request = factory.post('/api/v1/recommendation/recommend/menu/',
+                              data='invalid json',
+                              content_type='application/json')
+        request.user = self.user
         
-        request = Mock(method='POST')
-        request.body = "invalid json"
+        response = recommend_menu(request)
         
-        response = view.post(request)
+        # Should handle the error gracefully (may raise exception or return error)
+        self.assertIn(response.status_code, [400, 500])
+    
+    def test_recommend_menu_no_restaurant_recommender(self):
+        """Test recommend_menu handles missing RestaurantRecommender"""
+        from .api import recommend_menu
+        from rest_framework.test import APIRequestFactory
+        import sys
+        from unittest.mock import patch
+        
+        # Temporarily set RestaurantRecommender to None in the module
+        import recommendation_system.api as api_module
+        original_recommender = getattr(api_module, 'RestaurantRecommender', None)
+        api_module.RestaurantRecommender = None
+        
+        try:
+            factory = APIRequestFactory()
+            request = factory.post('/api/v1/recommendation/recommend/menu/', {
+                'user_location': [127.0, 37.5]
+            }, format='json')
+            request.user = self.user
+            
+            response = recommend_menu(request)
+            
+            self.assertEqual(response.status_code, 500)
+            data = json.loads(response.content.decode('utf-8'))
+            self.assertIn('RestaurantRecommender', data['error'])
+        finally:
+            # Restore original
+            api_module.RestaurantRecommender = original_recommender
+    
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_place_missing_user_id(self, mock_recommender):
+        """Test recommend_place requires user_id field"""
+        from .api import recommend_place
+        from rest_framework.test import APIRequestFactory
+        
+        factory = APIRequestFactory()
+        request = factory.post('/api/v1/recommendation/recommend/place/', {
+            'user_location': [127.0, 37.5]
+            # Missing user_id
+        }, format='json')
+        request.user = self.user
+        
+        response = recommend_place(request)
+        
+        # Should return 400 for missing user_id
+        self.assertEqual(response.status_code, 400)
+        data = response.data
+        self.assertIn('필수 필드 누락', str(data['error']))
+    
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_place_missing_required_field(self, mock_recommender):
+        """Test recommend_place validates required fields"""
+        from .api import recommend_place
+        from rest_framework.test import APIRequestFactory
+        
+        factory = APIRequestFactory()
+        # Create request with empty body (missing user_location)
+        request = factory.post('/api/v1/recommendation/recommend/place/',
+                              data=json.dumps({}),
+                              content_type='application/json')
+        request.user = self.user
+        
+        response = recommend_place(request)
         
         self.assertEqual(response.status_code, 400)
+        data = response.data if hasattr(response, 'data') else json.loads(response.content.decode('utf-8'))
+        self.assertIn('필수 필드 누락', str(data))
 
 
 class DocumentBuilderExtendedTests(TestCase):
@@ -1742,160 +1821,527 @@ class ScoringExtendedTests(TestCase):
 
 
 class APIViewExtendedTests(TestCase):
+    """Extended tests for current API functions"""
     
-    @patch('recommendation_system.api.RecommendationAPIView._initialize_services')
-    def test_initialization_error(self, mock_init):
-        from .api import RecommendationAPIView
-        
-        mock_init.side_effect = Exception("Init failed")
-        
-        with self.assertRaises(Exception):
-            view = RecommendationAPIView()
+    def setUp(self):
+        """Set up test fixtures"""
+        from users.models import User
+        self.user = User.objects.create_user(
+            username='testuser_extended',
+            email='test_extended@test.com',
+            password='testpass123'
+        )
     
-    @patch('recommendation_system.api.RecommendationEngine')
-    @patch('recommendation_system.api.VectorIndexBuilder')
-    @patch('recommendation_system.api.EmbeddingService')
-    @patch('recommendation_system.api.UserPreference.objects')
-    def test_recommend_menu_with_user_preference(self, mock_pref_objects, mock_embedding, mock_builder, mock_engine):
+    @patch('recommendation_system.api.RestaurantRecommender')
+    @patch('recommendation_system.api.get_menu_embedding_pipeline')
+    @patch('recommendation_system.api.get_user_embedding_aggregator')
+    @patch('recommendation_system.api.get_rl_scorer')
+    @patch('users.models.UserPreference.objects')
+    def test_recommend_menu_with_user_preference(self, mock_pref_objects, mock_rl_scorer, 
+                                                   mock_user_agg, mock_menu_pipe, mock_recommender_class):
+        """Test recommend_menu with user preferences"""
         from .api import recommend_menu
         from rest_framework.test import APIRequestFactory
-        from users.models import User
         
-        user = User.objects.create_user(username='testuser', email='test@test.com', password='pass')
-        
-        mock_pref = Mock()
-        mock_pref.spicy_level = 3
-        mock_pref.sweet_level = 2
-        mock_pref.salty_level = 4
+        # Mock user preference
+        from users.models import UserPreference
+        mock_pref = Mock(spec=UserPreference)
+        mock_pref.spicy_level = 3.0
+        mock_pref.sweet_level = 2.0
+        mock_pref.salty_level = 4.0
         mock_pref.allergies = ['땅콩']
         mock_pref.disliked_ingredients = ['고수']
         mock_pref.favorite_cuisines = ['한식']
+        mock_pref.exploration_preference = 2.5
+        mock_pref.rl_weight_vector = None
         mock_pref_objects.get.return_value = mock_pref
         
-        mock_engine_instance = Mock()
-        mock_engine_instance.search_menu.return_value = []
-        mock_engine.return_value = mock_engine_instance
+        # Mock RestaurantRecommender
+        mock_recommender = Mock()
+        mock_recommender.find_nearby_restaurants.return_value = []
+        mock_recommender.get_restaurant_menus.return_value = {}
+        mock_recommender.close = Mock()
+        mock_recommender_class.return_value = mock_recommender
+        
+        # Mock other services
+        mock_user_agg.return_value = None
+        mock_menu_pipe.return_value = None
+        mock_rl_scorer.return_value = None
         
         factory = APIRequestFactory()
-        request = factory.post('/api/recommendation_system/recommend/menu/', {
+        request = factory.post('/api/v1/recommendation/recommend/menu/', {
             'user_location': [127.0, 37.5],
             'query_text': '김치찌개'
         }, format='json')
-        request.user = user
+        request.user = self.user
         
         response = recommend_menu(request)
         
+        # Should return success even with empty results
         self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content.decode('utf-8'))
+        self.assertTrue(data.get('success', False))
     
-    @patch('recommendation_system.api.RecommendationEngine')
-    @patch('recommendation_system.api.VectorIndexBuilder')
-    @patch('recommendation_system.api.EmbeddingService')
-    def test_recommend_menu_error(self, mock_embedding, mock_builder, mock_engine):
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_menu_search_error(self, mock_recommender_class):
+        """Test recommend_menu handles search errors gracefully"""
         from .api import recommend_menu
         from rest_framework.test import APIRequestFactory
-        from users.models import User
         
-        user = User.objects.create_user(username='testuser2', email='test2@test.com', password='pass')
-        
-        mock_engine.side_effect = Exception("Search failed")
+        # Mock RestaurantRecommender to raise exception
+        mock_recommender = Mock()
+        mock_recommender.find_nearby_restaurants.side_effect = Exception("Database connection failed")
+        mock_recommender_class.return_value = mock_recommender
         
         factory = APIRequestFactory()
-        request = factory.post('/api/recommendation_system/recommend/menu/', {
+        request = factory.post('/api/v1/recommendation/recommend/menu/', {
             'user_location': [127.0, 37.5]
         }, format='json')
-        request.user = user
+        request.user = self.user
         
         response = recommend_menu(request)
         
         self.assertEqual(response.status_code, 500)
+        data = json.loads(response.content.decode('utf-8'))
+        self.assertIn('error', data)
     
-    @patch('recommendation_system.api.RecommendationEngine')
-    @patch('recommendation_system.api.VectorIndexBuilder')
-    @patch('recommendation_system.api.EmbeddingService')
-    def test_recommend_place_success(self, mock_embedding, mock_builder, mock_engine):
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_place_success(self, mock_recommender_class):
+        """Test recommend_place successful response"""
         from .api import recommend_place
         from rest_framework.test import APIRequestFactory
         
-        mock_engine_instance = Mock()
-        mock_engine_instance.search_place.return_value = []
-        mock_engine.return_value = mock_engine_instance
+        # Mock RestaurantRecommender
+        mock_recommender = Mock()
+        mock_recommender.find_nearby_restaurants.return_value = []
+        mock_recommender.close = Mock()
+        mock_recommender_class.return_value = mock_recommender
         
         factory = APIRequestFactory()
-        request = factory.post('/api/recommendation_system/recommend/place/', {
-            'user_id': 'test_user',
+        request = factory.post('/api/v1/recommendation/recommend/place/', {
+            'user_id': self.user.username,
             'user_location': [127.0, 37.5],
             'query_text': '한식당'
         }, format='json')
+        request.user = self.user
         
         response = recommend_place(request)
         
         self.assertEqual(response.status_code, 200)
+        data = response.data
+        self.assertTrue(data.get('success', False))
     
-    @patch('recommendation_system.api.RecommendationEngine')
-    @patch('recommendation_system.api.VectorIndexBuilder')
-    @patch('recommendation_system.api.EmbeddingService')
-    def test_recommend_place_error(self, mock_embedding, mock_builder, mock_engine):
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_place_search_error(self, mock_recommender_class):
+        """Test recommend_place handles search errors gracefully"""
         from .api import recommend_place
         from rest_framework.test import APIRequestFactory
         
-        mock_engine.side_effect = Exception("Search failed")
+        # Mock RestaurantRecommender to raise exception
+        mock_recommender = Mock()
+        mock_recommender.find_nearby_restaurants.side_effect = Exception("Database connection failed")
+        mock_recommender_class.return_value = mock_recommender
         
         factory = APIRequestFactory()
-        request = factory.post('/api/recommendation_system/recommend/place/', {
-            'user_id': 'test_user',
+        request = factory.post('/api/v1/recommendation/recommend/place/', {
+            'user_id': self.user.username,
             'user_location': [127.0, 37.5]
         }, format='json')
+        request.user = self.user
         
         response = recommend_place(request)
         
         self.assertEqual(response.status_code, 500)
+        data = response.data
+        self.assertIn('error', data)
     
-    @patch('recommendation_system.api.RecommendationAPIView._create_search_context')
-    @patch('recommendation_system.api.RecommendationAPIView._create_user_profile')
-    @patch('recommendation_system.api.RecommendationAPIView._initialize_services')
-    def test_api_view_create_profile_error(self, mock_init, mock_profile, mock_context):
-        from .api import RecommendationAPIView
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_menu_method_not_allowed(self, mock_recommender_class):
+        """Test recommend_menu only accepts POST requests"""
+        from .api import recommend_menu
+        from rest_framework.test import APIRequestFactory
         
-        view = RecommendationAPIView()
-        view.embedding_service = Mock()
-        view.recommendation_engine = Mock()
+        factory = APIRequestFactory()
+        request = factory.get('/api/v1/recommendation/recommend/menu/')
+        request.user = self.user
         
-        mock_profile.side_effect = Exception("Profile creation failed")
+        response = recommend_menu(request)
         
-        request = Mock(method='POST')
-        request.body = json.dumps({
-            'user_id': 'test',
-            'user_location': [127.0, 37.5],
-            'query_type': 'menu'
-        })
-        
-        response = view.post(request)
-        
-        self.assertEqual(response.status_code, 500)
+        # Should return 405 Method Not Allowed
+        self.assertEqual(response.status_code, 405)
+        # Response might be JsonResponse or DRF Response
+        try:
+            data = json.loads(response.content.decode('utf-8'))
+            self.assertIn('Method not allowed', data.get('error', ''))
+        except (json.JSONDecodeError, AttributeError):
+            # If not JSON, just check status code
+            pass
     
-    @patch('recommendation_system.api.RecommendationAPIView._search_menu_recommendations')
-    @patch('recommendation_system.api.RecommendationAPIView._create_search_context')
-    @patch('recommendation_system.api.RecommendationAPIView._create_user_profile')
-    @patch('recommendation_system.api.RecommendationAPIView._initialize_services')
-    def test_api_view_search_error(self, mock_init, mock_profile, mock_context, mock_search):
-        from .api import RecommendationAPIView
+    @patch('recommendation_system.api.RestaurantRecommender')
+    def test_recommend_place_with_query_text(self, mock_recommender_class):
+        """Test recommend_place with query text"""
+        from .api import recommend_place
+        from rest_framework.test import APIRequestFactory
         
-        view = RecommendationAPIView()
-        view.embedding_service = Mock()
-        view.recommendation_engine = Mock()
+        # Mock RestaurantRecommender
+        mock_recommender = Mock()
+        mock_recommender.find_nearby_restaurants.return_value = []
+        mock_recommender.close = Mock()
+        mock_recommender_class.return_value = mock_recommender
         
-        mock_profile.return_value = "profile"
-        mock_context.return_value = Mock()
-        mock_search.side_effect = Exception("Search failed")
-        
-        request = Mock(method='POST')
-        request.body = json.dumps({
-            'user_id': 'test',
+        factory = APIRequestFactory()
+        request = factory.post('/api/v1/recommendation/recommend/place/', {
+            'user_id': self.user.username,
             'user_location': [127.0, 37.5],
-            'query_type': 'menu'
-        })
+            'query_text': '한식당',
+            'max_results': 10
+        }, format='json')
+        request.user = self.user
         
-        response = view.post(request)
+        response = recommend_place(request)
         
-        self.assertEqual(response.status_code, 500)
+        # Should return success
+        self.assertEqual(response.status_code, 200)
+        data = response.data
+        self.assertTrue(data.get('success', False))
+
+
+class ScoringStrategyTests(TestCase):
+    """Strategy Pattern implementation tests"""
+    
+    def setUp(self):
+        """Set up test fixtures"""
+        self.search_context = SearchContext(
+            user_location=(126.9619864, 37.477136),
+            budget_range=(5000, 15000),
+            max_distance=3.0,
+            allergies=["땅콩"],
+            dislikes=["고수"],
+            preferred_categories=["한식"],
+            time_of_day="점심",
+            day_of_week="평일"
+        )
+        
+        self.menu = {
+            "name": "김치찌개",
+            "rating": 4.5,
+            "review_count": 500,
+            "price": 10000,
+            "x": 126.9619864,
+            "y": 37.477136,
+            "keywords": ["김치", "돼지고기"],
+            "has_image": True,
+            "category": "한식"
+        }
+        
+        self.user_prefs = {
+            "preferred_categories": ["한식"],
+            "allergies": ["땅콩"],
+            "dislikes": ["고수"]
+        }
+
+
+class HybridScoringStrategyTests(ScoringStrategyTests):
+    """Tests for HybridScoringStrategy"""
+    
+    def setUp(self):
+        super().setUp()
+        self.strategy = HybridScoringStrategy()
+    
+    def test_is_available(self):
+        """Test that HybridScoringStrategy is always available"""
+        self.assertTrue(self.strategy.is_available())
+    
+    def test_calculate_score_basic(self):
+        """Test basic score calculation"""
+        score, components = self.strategy.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=0.8
+        )
+        
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
+        self.assertIsNone(components)  # HybridScorer doesn't return components
+    
+    def test_calculate_score_without_search_context(self):
+        """Test that missing search_context returns error"""
+        score, components = self.strategy.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=None,
+            text_similarity=0.8
+        )
+        
+        self.assertEqual(score, 0.0)
+        self.assertIsNone(components)
+    
+    def test_calculate_score_without_text_similarity(self):
+        """Test that missing text_similarity uses default"""
+        score, components = self.strategy.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=None
+        )
+        
+        # Should still calculate a score with default similarity
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
+    
+    def test_calculate_score_with_different_menu_formats(self):
+        """Test that different menu dict formats work"""
+        menu_alt = {
+            "name": "된장찌개",
+            "avg_rating": 4.3,  # Different key
+            "review_count": 300,
+            "avg_price": 8000,  # Different key
+            "x": 126.9700000,
+            "y": 37.4800000,
+            "keywords": ["된장", "두부"],
+            "images": ["http://example.com/image.jpg"]  # Different format
+        }
+        
+        score, components = self.strategy.calculate_score(
+            menu=menu_alt,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=0.7
+        )
+        
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
+
+
+class RLScoringStrategyTests(ScoringStrategyTests):
+    """Tests for RLScoringStrategy"""
+    
+    def setUp(self):
+        super().setUp()
+        self.strategy = RLScoringStrategy()
+    
+    def test_is_available(self):
+        """Test RL scorer availability"""
+        # This depends on whether RL scorer can be initialized
+        # It's fine if it's not available in test environment
+        available = self.strategy.is_available()
+        self.assertIsInstance(available, bool)
+    
+    def test_calculate_score_when_available(self):
+        """Test score calculation when RL scorer is available"""
+        if not self.strategy.is_available():
+            self.skipTest("RLScorer not available in test environment")
+        
+        score, components = self.strategy.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            user_embedding=[0.1] * 512,  # Mock embedding
+            menu_embedding=[0.2] * 512
+        )
+        
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
+        # RLScorer returns components
+        self.assertIsNotNone(components)
+    
+    def test_calculate_score_when_unavailable(self):
+        """Test that unavailable RL scorer returns 0.0"""
+        if self.strategy.is_available():
+            self.skipTest("RLScorer is available, testing unavailable case")
+        
+        score, components = self.strategy.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context
+        )
+        
+        self.assertEqual(score, 0.0)
+        self.assertIsNone(components)
+    
+    def test_calculate_score_with_user_location_from_context(self):
+        """Test that user_location is extracted from search_context"""
+        if not self.strategy.is_available():
+            self.skipTest("RLScorer not available in test environment")
+        
+        score, components = self.strategy.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            user_location=None  # Not provided, should use search_context
+        )
+        
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
+
+
+class ScoringContextTests(ScoringStrategyTests):
+    """Tests for ScoringContext"""
+    
+    def test_create_default_strategy(self):
+        """Test factory method creates appropriate default strategy"""
+        context = ScoringContext()
+        strategy = context.get_strategy()
+        
+        self.assertIsNotNone(strategy)
+        self.assertTrue(isinstance(strategy, (RLScoringStrategy, HybridScoringStrategy)))
+    
+    def test_set_strategy(self):
+        """Test runtime strategy switching"""
+        context = ScoringContext()
+        hybrid_strategy = HybridScoringStrategy()
+        
+        context.set_strategy(hybrid_strategy)
+        self.assertEqual(context.get_strategy(), hybrid_strategy)
+    
+    def test_calculate_score_delegates_to_strategy(self):
+        """Test that context delegates to strategy"""
+        hybrid_strategy = HybridScoringStrategy()
+        context = ScoringContext(strategy=hybrid_strategy)
+        
+        score, components = context.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=0.8
+        )
+        
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
+    
+    def test_calculate_score_with_default_strategy(self):
+        """Test score calculation with auto-selected strategy"""
+        context = ScoringContext()  # Uses factory method
+        
+        score, components = context.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=0.8
+        )
+        
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
+    
+    def test_calculate_score_with_no_strategy(self):
+        """Test error handling when no strategy is set"""
+        context = ScoringContext()
+        # Manually set strategy to None to test error path
+        context._strategy = None
+        
+        score, components = context.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context
+        )
+        
+        self.assertEqual(score, 0.0)
+        self.assertIsNone(components)
+    
+    def test_calculate_score_with_unavailable_strategy(self):
+        """Test handling of unavailable strategy"""
+        # Create a mock unavailable strategy
+        class UnavailableStrategy(ScoringStrategy):
+            def is_available(self):
+                return False
+            
+            def calculate_score(self, **kwargs):
+                return (0.0, None)
+        
+        context = ScoringContext(strategy=UnavailableStrategy())
+        score, components = context.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context
+        )
+        
+        self.assertEqual(score, 0.0)
+        self.assertIsNone(components)
+    
+    def test_strategy_preference_order(self):
+        """Test that RL strategy is preferred over Hybrid"""
+        context = ScoringContext()
+        strategy = context.get_strategy()
+        
+        # If RL is available, it should be selected
+        # If not, Hybrid should be used
+        if isinstance(strategy, RLScoringStrategy):
+            self.assertTrue(strategy.is_available())
+        else:
+            # Hybrid is fallback
+            self.assertIsInstance(strategy, HybridScoringStrategy)
+
+
+class ScoringStrategyIntegrationTests(ScoringStrategyTests):
+    """Integration tests for Strategy Pattern with real scenarios"""
+    
+    def test_strategy_switching(self):
+        """Test switching between strategies at runtime"""
+        context = ScoringContext()
+        
+        # Start with default
+        score1, _ = context.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=0.8
+        )
+        
+        # Switch to hybrid explicitly
+        context.set_strategy(HybridScoringStrategy())
+        score2, _ = context.calculate_score(
+            menu=self.menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=0.8
+        )
+        
+        # Both should return valid scores
+        self.assertIsInstance(score1, float)
+        self.assertIsInstance(score2, float)
+        self.assertGreaterEqual(score1, 0.0)
+        self.assertGreaterEqual(score2, 0.0)
+    
+    def test_different_menu_types(self):
+        """Test that strategies work with different menu types"""
+        context = ScoringContext()
+        
+        # Restaurant menu
+        restaurant_menu = {
+            "name": "김치찌개",
+            "rating": 4.5,
+            "review_count": 500,
+            "price": 10000,
+            "x": 126.9619864,
+            "y": 37.477136,
+            "keywords": ["한식"],
+            "category": "한식"
+        }
+        
+        score, _ = context.calculate_score(
+            menu=restaurant_menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=0.75
+        )
+        
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
+    
+    def test_edge_case_empty_menu(self):
+        """Test handling of minimal menu data"""
+        context = ScoringContext()
+        minimal_menu = {"name": "테스트"}
+        
+        score, components = context.calculate_score(
+            menu=minimal_menu,
+            user_prefs=self.user_prefs,
+            search_context=self.search_context,
+            text_similarity=0.5
+        )
+        
+        # Should handle gracefully, return a score (possibly 0.0)
+        self.assertIsInstance(score, float)
+        self.assertGreaterEqual(score, 0.0)
 
