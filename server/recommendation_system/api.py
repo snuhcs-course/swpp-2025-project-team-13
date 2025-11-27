@@ -539,7 +539,8 @@ def derive_preferred_categories_from_scraps(user_id: int, top_k: int = 3, min_co
         logger.info(f"스크랩 기반 선호 카테고리(user_id={user_id}): {top_categories}")
     return top_categories
 
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def recommend_menu(request):
     """메뉴 추천 API - Using StreamingHttpResponse with proper chunking for real-time delivery"""
     # Manually check authentication
@@ -633,6 +634,7 @@ def recommend_menu(request):
         if ep_from_gallery is not None:
             exploration_preference = ep_from_gallery
             logger.info(f"갤러리 기반 exploration_preference 적용: {exploration_preference}")
+        
         # 스크랩 기반 상위 카테고리를 선호 카테고리에 병합 (기존 로직 보존 + 보강)
         try:
             scrap_pref_cats = derive_preferred_categories_from_scraps(request.user.id, top_k=3, min_count=1)
