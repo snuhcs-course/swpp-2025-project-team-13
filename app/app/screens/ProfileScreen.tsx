@@ -180,7 +180,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
 
   const logout = async () => {
     await userAuthFacade.logoutUser()
-    navigation.replace("Welcome")
+    // Navigate to Welcome screen after logout
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Welcome" }],
+    })
   }
 
   return (

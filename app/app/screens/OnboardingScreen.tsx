@@ -101,6 +101,9 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
   const [locationPermissionGranted, setLocationPermissionGranted] = useState(false)
   const [galleryPermissionGranted, setGalleryPermissionGranted] = useState(false)
   const { scanAlbums } = useAlbumScanner()
+  const [galleryPermissionResponse, requestGalleryPermission] = MediaLibrary.usePermissions(
+    { granularPermissions: ['photo'] }
+  )
 
   const currentStep = TASTE_STEPS[currentStepIdx]
   const totalSteps = TASTE_STEPS.length
@@ -116,6 +119,13 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
       useNativeDriver: false,
     }).start()
   }, [currentStepIdx, totalSteps])
+
+  // Sync gallery permission status with hook response
+  useEffect(() => {
+    if (galleryPermissionResponse?.status === 'granted') {
+      setGalleryPermissionGranted(true)
+    }
+  }, [galleryPermissionResponse?.status])
 
   const handleLocationPermission = async () => {
     const moveToNextStep = () => {
@@ -145,8 +155,14 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
     }
 
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync()
-      if (status === 'granted') {
+      // Request only photo permissions, not audio/music permissions (using usePermissions hook)
+      let permissionStatus = galleryPermissionResponse?.status
+      if (permissionStatus !== 'granted') {
+        const response = await requestGalleryPermission()
+        permissionStatus = response?.status
+      }
+      
+      if (permissionStatus === 'granted') {
         setGalleryPermissionGranted(true)
         // Start scanning albums in the background
         scanAlbums(() => {
@@ -421,13 +437,15 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
     </View>
   )
 
-  const renderGalleryPermission = () => (
+  const renderGalleryPermission = () => {
+    const isGranted = galleryPermissionGranted || galleryPermissionResponse?.status === 'granted'
+    return (
     <View style={$stepContainer}>
       <View style={$locationIconContainer}>
         <Ionicons 
           name="images" 
           size={80} 
-          color={galleryPermissionGranted ? colors.palette.primary500 : colors.palette.neutral400}
+          color={isGranted ? colors.palette.primary500 : colors.palette.neutral400}
         />
       </View>
       <Text style={$stepTitle}>갤러리 동기화</Text>
@@ -449,7 +467,8 @@ export const OnboardingScreen = observer(function OnboardingScreen({ navigation 
         </View>
       </View>
     </View>
-  )
+    )
+  }
 
   const renderCurrentStep = () => {
     switch (currentStep) {
