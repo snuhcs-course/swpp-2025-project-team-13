@@ -124,7 +124,7 @@ class EmbeddingConfig:
     db_port: str = os.getenv('DB_PORT', '5432')
     db_name: str = os.getenv('DB_NAME', 'foodigram')
     db_user: str = os.getenv('DB_USER', 'postgres')
-    db_password: str = os.getenv('DB_PASSWORD', '')
+    db_password: str = os.getenv('DB_PASSWORD', 'postgres')
     
     # OpenAI configuration
     openai_api_key: str = os.getenv('OPENAI_API_KEY', '')

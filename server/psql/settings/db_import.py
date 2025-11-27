@@ -153,7 +153,7 @@ def import_database(filename=None):
     
     if use_docker:
         clear_cmd = [
-            'docker', 'exec', container_name,
+            'sudo', 'docker', 'exec', container_name,
             'psql',
             '-U', db_params['user'],
             '-d', db_params['database'],
@@ -183,7 +183,7 @@ def import_database(filename=None):
                 sql_content = f.read()
             
             import_cmd = [
-                'docker', 'exec', '-i', container_name,
+                'sudo', 'docker', 'exec', '-i', container_name,
                 'psql',
                 '-U', db_params['user'],
                 '-d', db_params['database']
