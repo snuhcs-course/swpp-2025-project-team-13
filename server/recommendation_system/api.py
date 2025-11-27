@@ -22,7 +22,8 @@ from rest_framework import status
 
 from .user_profile import UserProfileService, create_sample_user_profile
 from .scoring import SearchContext, HybridScorer, MMRReranker, RecommendationReranker
-from users.models import UserPreference, UserGalleryImage
+from users.models import UserPreference, UserGalleryImage, UserScrap
+from psql_data.models import DbRestaurant
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +218,50 @@ def calculate_gallery_exploration_preference(user_id: int, min_images: int = 10)
     return exploration_score
 
 
+def derive_preferred_categories_from_scraps(user_id: int, top_k: int = 3, min_count: int = 1) -> List[str]:
+    """
+    사용자의 스크랩한 음식점들을 PSQL 레스토랑(external_id 매핑)로 연결해
+    category_normalized 상위 빈도 카테고리를 반환한다.
+    """
+    try:
+        # UserScrap → Restaurant.source(external_id로 가정)
+        sources = list(
+            UserScrap.objects.filter(user_id=user_id)
+            .select_related('restaurant')
+            .values_list('restaurant__source', flat=True)
+        )
+    except Exception as exc:
+        logger.warning(f"스크랩 카테고리 추출 실패(user_id={user_id}): {exc}")
+        return []
+    
+    if not sources:
+        return []
+    
+    try:
+        categories = list(
+            DbRestaurant.objects.filter(external_id__in=sources)
+            .exclude(category_normalized__isnull=True)
+            .exclude(category_normalized__exact='')
+            .values_list('category_normalized', flat=True)
+        )
+    except Exception as exc:
+        logger.warning(f"스크랩-PSQL 카테고리 매핑 실패(user_id={user_id}): {exc}")
+        return []
+    
+    if not categories:
+        return []
+    
+    counts = Counter(categories)
+    # 최소 등장 횟수 필터 및 상위 k 추출
+    filtered = [(cat, cnt) for cat, cnt in counts.items() if cnt >= min_count]
+    filtered.sort(key=lambda x: x[1], reverse=True)
+    top_categories = [cat for cat, _ in filtered[:top_k]]
+    
+    if top_categories:
+        logger.info(f"스크랩 기반 선호 카테고리(user_id={user_id}): {top_categories}")
+    return top_categories
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def recommend_menu(request):
@@ -287,6 +332,18 @@ def recommend_menu(request):
         if ep_from_gallery is not None:
             exploration_preference = ep_from_gallery
             logger.info(f"갤러리 기반 exploration_preference 적용: {exploration_preference}")
+        
+        # 스크랩 기반 상위 카테고리를 선호 카테고리에 병합 (기존 로직 보존 + 보강)
+        try:
+            scrap_pref_cats = derive_preferred_categories_from_scraps(request.user.id, top_k=3, min_count=1)
+            if scrap_pref_cats:
+                existing = onboarding_data.get('preferred_categories', []) or []
+                # 기존 + 스크랩 카테고리 유니크 병합 (순서 유지)
+                merged = list(dict.fromkeys([*existing, *scrap_pref_cats]))
+                onboarding_data['preferred_categories'] = merged
+                logger.info(f"스크랩 기반 선호 카테고리 병합: {merged}")
+        except Exception as exc:
+            logger.warning(f"스크랩 기반 선호 카테고리 병합 실패: {exc}")
 
         gallery_analysis = data.get('gallery_analysis')
         behavior_data = data.get('behavior_data')
