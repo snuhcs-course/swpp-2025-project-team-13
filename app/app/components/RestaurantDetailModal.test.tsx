@@ -43,14 +43,14 @@ describe("RestaurantDetailModal", () => {
     const { getByText } = render(
       <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    expect(getByText("음식점 정보")).toBeTruthy()
+    expect(getByText("Restaurant Info")).toBeTruthy()
   })
 
   it("does not render when not visible", () => {
     const { queryByText } = render(
       <RestaurantDetailModal restaurantId={1} visible={false} onClose={jest.fn()} />,
     )
-    expect(queryByText("음식점 정보")).toBeNull()
+    expect(queryByText("Restaurant Info")).toBeNull()
   })
 
   it("calls onClose when modal is closed", () => {
@@ -96,7 +96,7 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("주소:")).toBeTruthy()
+      expect(getByText("Address:")).toBeTruthy()
       expect(getByText("123 Test St")).toBeTruthy()
     })
   })
@@ -107,7 +107,7 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("전화:")).toBeTruthy()
+      expect(getByText("Phone:")).toBeTruthy()
       expect(getByText("010-1234-5678")).toBeTruthy()
     })
   })
@@ -118,7 +118,7 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("메뉴")).toBeTruthy()
+      expect(getByText("Menu")).toBeTruthy()
     })
   })
 
@@ -139,8 +139,8 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("10,000원")).toBeTruthy()
-      expect(getByText("15,000원")).toBeTruthy()
+      expect(getByText("₩10,000")).toBeTruthy()
+      expect(getByText("₩15,000")).toBeTruthy()
     })
   })
 
@@ -164,7 +164,7 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("음식점 정보를 불러올 수 없습니다")).toBeTruthy()
+      expect(getByText("Unable to load restaurant information")).toBeTruthy()
     })
   })
 

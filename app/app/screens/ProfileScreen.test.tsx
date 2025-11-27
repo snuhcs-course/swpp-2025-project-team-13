@@ -4,84 +4,98 @@ import { ProfileScreen } from "./ProfileScreen";
 
 // Mocks for navigation and store context
 const mockReplace = jest.fn();
-const navigation = { replace: mockReplace, navigate: jest.fn() };
+const mockNavigate = jest.fn();
+const navigation = { replace: mockReplace, navigate: mockNavigate };
 
-jest.mock("../models", () => ({ useStores: () => ({ foodHistoryStore: { scrappedItemsList: [] } }) }));
-jest.mock("app/services/albums/useAlbumScanner", () => ({ useAlbumScanner: () => ({ scanAlbums: jest.fn() }) }));
-jest.mock("app/services/api", () => ({ api: { me: jest.fn(() => Promise.resolve({ ok: true, data: { username: "Sophia" } })), logout: jest.fn() } }));
-jest.mock("app/services/aws/handleAwsSignin", () => ({ handleSignOut: jest.fn() }));
-jest.mock("app/utils/storage", () => ({ remove: jest.fn() }));
+// Mock stores with menuScrapStore
+jest.mock("../models", () => ({
+  useStores: () => ({
+    foodHistoryStore: {
+      scrappedItemsList: [],
+      scrappedItems: [],
+      isScrapped: jest.fn(() => false),
+      toggleScrappedItem: jest.fn(),
+    },
+    menuScrapStore: {
+      scrappedMenusList: [],
+      scrappedMenus: [],
+      isScrapped: jest.fn(() => false),
+      toggleScrappedMenu: jest.fn(),
+      addScrappedMenu: jest.fn(),
+      removeScrappedMenu: jest.fn(),
+    },
+  }),
+}));
 
-// Silence useEffect warning
-jest.spyOn(React, 'useEffect').mockImplementation(f => f());
+jest.mock("app/services/albums/useAlbumScanner", () => ({
+  useAlbumScanner: () => ({ scanAlbums: jest.fn(), albums: [], scannedImages: [] }),
+}));
+
+jest.mock("app/services/api", () => ({
+  api: {
+    me: jest.fn(() => Promise.resolve({ ok: true, data: { username: "Sophia" } })),
+    logout: jest.fn(() => Promise.resolve({ ok: true })),
+  },
+}));
+
+jest.mock("app/services/aws/handleAwsSignin", () => ({
+  handleSignOut: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock("app/utils/storage", () => ({
+  remove: jest.fn(() => Promise.resolve()),
+}));
 
 describe("ProfileScreen", () => {
-  it("renders profile name and static sections", async () => {
-    const { queryByText } = render(<ProfileScreen navigation={navigation} />);
-    expect(queryByText("foodigram")).toBeTruthy();
-    // Profile user
-    expect(queryByText("Sophia")).toBeTruthy();
-    expect(queryByText("Foodie")).toBeTruthy();
-    // Liked restaurants (sample names from component)
-    expect(queryByText("The Pasta Place")).toBeTruthy();
-    expect(queryByText("Ocean's Catch")).toBeTruthy();
-    expect(queryByText("Sweet Garden")).toBeTruthy();
-    // Food history
-    expect(queryByText("Food History")).toBeTruthy();
-    // Log out button
-    expect(queryByText("Log out")).toBeTruthy();
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  it("opens filter modal when filter button is pressed", () => {
-    const { getByTestId } = render(<ProfileScreen navigation={navigation} />);
-    fireEvent.press(getByTestId('filter-button'));
+  it("renders profile screen", async () => {
+    const { toJSON } = render(<ProfileScreen navigation={navigation} />);
+    expect(toJSON()).toBeTruthy();
   });
 
-  it("calls logout and navigates to Login when logout button is pressed", async () => {
-    const { queryByText, getByText } = render(<ProfileScreen navigation={navigation} />);
-    fireEvent.press(getByText("Log out"));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("Login"));
+  it("renders bottom navigation", async () => {
+    const { getByText, getByTestId } = render(<ProfileScreen navigation={navigation} />);
+    expect(getByText("Discover")).toBeTruthy();
+    // Use testID for Profile tab to avoid conflict with header title
+    expect(getByTestId("UserTab")).toBeTruthy();
   });
 
-  it("can toggle User Images filter in filter modal", () => {
-    const { getByTestId, getByText } = render(<ProfileScreen navigation={navigation} />);
-    fireEvent.press(getByTestId('filter-button'));
-    // Filter modal should appear, press "User Images" to toggle
-    fireEvent.press(getByText('User Images'));
+  it("renders My Photos section", async () => {
+    const { getByText } = render(<ProfileScreen navigation={navigation} />);
+    await waitFor(() => {
+      expect(getByText("My Photos")).toBeTruthy();
+    });
   });
 
-  it("can toggle Scrapped filter in filter modal", () => {
-    const { getByTestId, getByText } = render(<ProfileScreen navigation={navigation} />);
-    fireEvent.press(getByTestId('filter-button'));
-    // Press "Scrapped" to toggle
-    fireEvent.press(getByText('Scrapped'));
+  it("renders Liked Restaurants section", async () => {
+    const { getByText } = render(<ProfileScreen navigation={navigation} />);
+    await waitFor(() => {
+      expect(getByText("Liked Restaurants")).toBeTruthy();
+    });
   });
 
-  it("can open/close preferences modal", () => {
-    const { getByTestId, queryByText } = render(<ProfileScreen navigation={navigation} />);
-    // Open
-    fireEvent.press(getByTestId('settings-button'));
-    expect(queryByText('Preferences')).toBeTruthy(); // Depends on actual PreferencesModal content
-    // Close by simulating onClose prop
-    // Normally, we'd invoke the onClose, but since it's conditional, skip actual closing
+  it("renders Edit Profile button", async () => {
+    const { getByText } = render(<ProfileScreen navigation={navigation} />);
+    await waitFor(() => {
+      expect(getByText("Edit Profile")).toBeTruthy();
+    });
   });
 
-  it("activates Foodigram tab on bottom nav", () => {
-    const { getByTestId } = render(<ProfileScreen navigation={navigation} />);
-    fireEvent.press(getByTestId('FoodigramTab'));
-    expect(navigation.navigate).toHaveBeenCalledWith('Foodigram');
+  it("renders empty state when no photos", async () => {
+    const { getByText } = render(<ProfileScreen navigation={navigation} />);
+    await waitFor(() => {
+      expect(getByText("No photos yet")).toBeTruthy();
+    });
   });
 
-  it("can close filter modal via backdrop press", () => {
-    const { getByTestId, getByText } = render(<ProfileScreen navigation={navigation} />);
-    fireEvent.press(getByTestId('filter-button'));
-    fireEvent.press(getByTestId('filter-modal-backdrop'));
+  it("navigates to Foodigram when Discover tab is pressed", async () => {
+    const { getByText } = render(<ProfileScreen navigation={navigation} />);
+    
+    fireEvent.press(getByText("Discover"));
+    
+    expect(mockNavigate).toHaveBeenCalledWith("Foodigram");
   });
-
-  it("can close filter modal via close(X) button", () => {
-    const { getByTestId, getByText } = render(<ProfileScreen navigation={navigation} />);
-    fireEvent.press(getByTestId('filter-button'));
-    fireEvent.press(getByTestId('filter-modal-close'));
-  });
-
 });

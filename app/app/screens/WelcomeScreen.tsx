@@ -67,7 +67,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = observer(function WelcomeSc
             <View style={styles.buttonWrapper}>
               <TouchableOpacity 
                 style={styles.signUpButton}
-                onPress={() => navigation.navigate("Login", { mode: "signup" } as any)}
+                onPress={() => navigation.navigate("SignUp")}
               >
                 <RNText style={styles.buttonText}>
                   Sign Up
@@ -76,7 +76,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = observer(function WelcomeSc
               
               <TouchableOpacity 
                 style={styles.logInButton}
-                onPress={() => navigation.navigate("Login", { mode: "login" } as any)}
+                onPress={() => navigation.navigate("Login")}
               >
                 <RNText style={styles.buttonText}>
                   Log In
@@ -98,6 +98,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   buttonContainer: {
     padding: 16,
+    paddingBottom: 24,
   } as ViewStyle,
   buttonText: {
     fontFamily: "PlusJakartaSans_700Bold",

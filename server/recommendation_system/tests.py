@@ -822,6 +822,80 @@ class UserProfileServiceTests(TestCase):
         self.assertEqual(request_data['user_id'], 'test_user')
         self.assertIn('onboarding_data', request_data)
         self.assertIn('taste_preferences', request_data['onboarding_data'])
+    
+    def test_create_user_profile_complete(self):
+        """완전한 사용자 프로필 생성 테스트"""
+        onboarding_data = {
+            'taste_preferences': {
+                'spicy': 4, 'sweet': 2, 'salty': 3, 'sour': 2, 'bitter': 1
+            },
+            'allergies': ['땅콩', '새우'],
+            'dislikes': ['고수'],
+            'preferred_categories': ['한식', '일식'],
+            'budget_range': [10000, 30000],
+            'distance_preference': 1.5
+        }
+        
+        gallery_analysis = {
+            'frequent_keywords': [['김치찌개', 10], ['된장찌개', 8]],
+            'time_patterns': {'점심': ['김치찌개']},
+            'day_patterns': {'평일': ['김치찌개']},
+            'recent_keywords': ['김치찌개', '라멘']
+        }
+        
+        behavior_data = {
+            'liked_menus': ['김치찌개'],
+            'liked_places': ['맛집'],
+            'saved_menus': [],
+            'saved_places': [],
+            'clicked_keywords': ['한식'],
+            'search_history': ['김치찌개 맛집']
+        }
+        
+        profile = self.service.create_user_profile(
+            'test_user', onboarding_data, gallery_analysis, behavior_data
+        )
+        
+        self.assertIsInstance(profile, str)
+        self.assertGreater(len(profile), 0)
+        self.assertIn('매운맛', profile)
+    
+    def test_create_user_profile_minimal(self):
+        """최소 데이터로 프로필 생성"""
+        onboarding_data = {}
+        
+        profile = self.service.create_user_profile('test_user', onboarding_data)
+        
+        self.assertIsInstance(profile, str)
+        self.assertGreater(len(profile), 0)
+    
+    def test_update_user_profile(self):
+        """사용자 프로필 업데이트 테스트"""
+        new_data = {
+            'taste_preferences': {
+                'spicy': 5, 'sweet': 1, 'salty': 3, 'sour': 2, 'bitter': 1
+            },
+            'allergies': [],
+            'dislikes': [],
+            'preferred_categories': ['중식'],
+            'budget_range': [20000, 50000],
+            'distance_preference': 3.0
+        }
+        
+        profile = self.service.update_user_profile('test_user', new_data)
+        
+        self.assertIsInstance(profile, str)
+        self.assertIn('매운맛 매우 선호', profile)
+    
+    def test_create_sample_user_profile(self):
+        """샘플 사용자 프로필 생성 함수 테스트"""
+        from .user_profile import create_sample_user_profile
+        
+        profile = create_sample_user_profile()
+        
+        self.assertIsInstance(profile, str)
+        self.assertGreater(len(profile), 0)
+        self.assertIn('단맛', profile)
 
 
 class IntegrationTests(TestCase):
@@ -1371,6 +1445,291 @@ class IntegrationTests(TestCase):
         self.assertIn('results', data)
 
 
+class InitModuleDocumentTests(TestCase):
+    """__init__.py 모듈의 DocumentTemplateGenerator 상세 테스트"""
+    
+    def test_build_menu_document_with_dict_keywords(self):
+        """딕셔너리 키워드로 메뉴 문서 생성 테스트"""
+        from . import DocumentTemplateGenerator
+        
+        builder = DocumentTemplateGenerator()
+        
+        place_data = {
+            'id': 'place1',
+            'name': '테스트 식당',
+            'group1': '서울',
+            'group2': '강남구',
+            'group3': '역삼동',
+            'x': 127.0,
+            'y': 37.5,
+            'category': '한식',
+            'keyword_list': [
+                {'label': '김치찌개'},
+                {'label': '된장찌개'}
+            ]
+        }
+        
+        menu_data = {
+            'index': 0,
+            'name': '김치찌개',
+            'price': 12000,
+            'images': ['http://example.com/img.jpg']
+        }
+        
+        stats = {
+            'review': {
+                'avgRating': 4.5,
+                'totalCount': 100
+            },
+            'analysis': {
+                'votedKeyword': {
+                    'details': [
+                        {'displayName': '맛있어요'},
+                        {'displayName': '양많아요'}
+                    ]
+                }
+            }
+        }
+        
+        doc = builder.build_menu_document(place_data, menu_data, stats)
+        
+        self.assertEqual(doc.menu_name, '김치찌개')
+        self.assertEqual(doc.price, 12000)
+        self.assertTrue(doc.has_image)
+        self.assertEqual(len(doc.image_urls), 1)
+    
+    def test_build_menu_document_no_stats(self):
+        """stats가 None인 경우 테스트"""
+        from . import DocumentTemplateGenerator
+        
+        builder = DocumentTemplateGenerator()
+        
+        place_data = {
+            'id': 'place1',
+            'name': '테스트 식당',
+            'x': 127.0,
+            'y': 37.5,
+            'keyword_list': ['김치']
+        }
+        
+        menu_data = {
+            'name': '김치찌개',
+            'price': '',
+            'images': []
+        }
+        
+        doc = builder.build_menu_document(place_data, menu_data, None)
+        
+        self.assertEqual(doc.price, 0)
+        self.assertEqual(doc.rating, 0.0)
+        self.assertFalse(doc.has_image)
+    
+    def test_build_place_document_with_features(self):
+        """features가 있는 가게 문서 생성 테스트"""
+        from . import DocumentTemplateGenerator
+        
+        builder = DocumentTemplateGenerator()
+        
+        place_data = {
+            'id': 'place1',
+            'name': '테스트 식당',
+            'category': '한식',
+            'group1': '서울',
+            'group2': '강남구',
+            'group3': '역삼동',
+            'x': 127.0,
+            'y': 37.5,
+            'avg_price': 15000,
+            'keyword_list': ['김치찌개', '된장찌개'],
+            'features': [
+                {'title': '주차가능'},
+                {'title': '단체석'}
+            ]
+        }
+        
+        stats = {
+            'review': {
+                'avgRating': 4.5,
+                'totalCount': 200
+            }
+        }
+        
+        doc = builder.build_place_document(place_data, stats)
+        
+        self.assertEqual(doc.name, '테스트 식당')
+        self.assertEqual(doc.avg_price, 15000)
+        self.assertIn('주차가능', doc.features)
+
+
+class EmbeddingServiceExtendedTests(TestCase):
+    """EmbeddingService 확장 테스트"""
+    
+    def test_embed_single_text(self):
+        """단일 텍스트 임베딩 테스트"""
+        from . import EmbeddingService
+        
+        service = EmbeddingService()
+        embedding = service.embed_single_text("테스트 텍스트")
+        
+        self.assertEqual(len(embedding), 768)
+    
+    def test_embed_empty_text(self):
+        """빈 텍스트 임베딩 테스트"""
+        from . import EmbeddingService
+        
+        service = EmbeddingService()
+        embeddings = service.embed_texts([""])
+        
+        self.assertEqual(len(embeddings), 1)
+        self.assertEqual(len(embeddings[0]), 768)
+
+
+class VectorIndexBuilderTests(TestCase):
+    """VectorIndexBuilder 테스트"""
+    
+    def test_build_menu_index(self):
+        """메뉴 인덱스 빌드 테스트"""
+        from . import VectorIndexBuilder, EmbeddingService, MenuDocument
+        
+        service = EmbeddingService()
+        builder = VectorIndexBuilder(service, "./test_chroma_db")
+        
+        menu_doc = MenuDocument(
+            id="menu1",
+            place_id="place1",
+            menu_name="김치찌개",
+            place_name="맛있는 식당",
+            price=8000,
+            category="한식",
+            location="서울/강남/역삼",
+            rating=4.5,
+            review_count=100,
+            keywords=["김치", "돼지고기"],
+            voted_keywords=["맛있어요"],
+            has_image=True,
+            image_urls=["http://example.com/img.jpg"],
+            coordinates=(127.0, 37.5),
+            document_text="김치찌개 맛있는 음식"
+        )
+        
+        # 더미 구현이므로 에러 없이 실행되는지만 확인
+        builder.build_menu_index([menu_doc])
+        
+        # 검색 (더미 구현은 빈 리스트 반환)
+        results = builder.search_menu("김치찌개", n_results=1)
+        self.assertEqual(results, [])
+    
+    def test_build_place_index(self):
+        """가게 인덱스 빌드 테스트"""
+        from . import VectorIndexBuilder, EmbeddingService, PlaceDocument
+        
+        service = EmbeddingService()
+        builder = VectorIndexBuilder(service)
+        
+        place_doc = PlaceDocument(
+            id="place1",
+            name="맛있는 식당",
+            category="한식",
+            location="서울/강남/역삼",
+            rating=4.5,
+            review_count=200,
+            avg_price=15000,
+            keywords=["김치찌개"],
+            voted_keywords=["맛있어요"],
+            features=["주차가능"],
+            coordinates=(127.0, 37.5),
+            document_text="맛있는 식당 설명"
+        )
+        
+        builder.build_place_index([place_doc])
+        results = builder.search_place("한식", n_results=1)
+        self.assertEqual(results, [])
+
+
+class RecommendationEngineExtendedTests(TestCase):
+    """RecommendationEngine 확장 테스트"""
+    
+    def test_search_menu_empty(self):
+        """메뉴 검색 테스트"""
+        from . import RecommendationEngine, VectorIndexBuilder, EmbeddingService
+        
+        service = EmbeddingService()
+        builder = VectorIndexBuilder(service)
+        engine = RecommendationEngine(builder)
+        
+        results = engine.search_menu("매운 음식 좋아하는 사용자", "김치찌개", k=5)
+        self.assertEqual(results, [])
+    
+    def test_search_place_empty(self):
+        """가게 검색 테스트"""
+        from . import RecommendationEngine, VectorIndexBuilder, EmbeddingService
+        
+        service = EmbeddingService()
+        builder = VectorIndexBuilder(service)
+        engine = RecommendationEngine(builder)
+        
+        results = engine.search_place("매운 음식 좋아하는 사용자", "한식당", k=5)
+        self.assertEqual(results, [])
+
+
+class DataProcessingTests(TestCase):
+    """데이터 처리 함수 테스트"""
+    
+    def test_process_restaurant_data_empty(self):
+        """빈 데이터 처리 테스트"""
+        from . import process_restaurant_data
+        
+        menu_docs, place_docs = process_restaurant_data([])
+        
+        self.assertEqual(len(menu_docs), 0)
+        self.assertEqual(len(place_docs), 0)
+    
+    def test_process_restaurant_data_invalid_item(self):
+        """잘못된 아이템 처리 테스트"""
+        from . import process_restaurant_data
+        
+        # 딕셔너리가 아닌 아이템
+        menu_docs, place_docs = process_restaurant_data(["invalid", 123, None])
+        
+        self.assertEqual(len(menu_docs), 0)
+        self.assertEqual(len(place_docs), 0)
+    
+    def test_process_restaurant_data_with_valid_data(self):
+        """유효한 데이터 처리 테스트"""
+        from . import process_restaurant_data
+        
+        restaurant_data = [
+            {
+                "basic_info": {
+                    "place_data": {
+                        "id": "place1",
+                        "name": "테스트 식당",
+                        "category": "한식",
+                        "x": 127.0,
+                        "y": 37.5,
+                        "group1": "서울",
+                        "group2": "강남구",
+                        "group3": "역삼동",
+                        "keyword_list": ["김치찌개", "된장찌개"]
+                    }
+                },
+                "detail_info": {
+                    "visitor_review_stats": {
+                        "review": {"avgRating": 4.5, "totalCount": 100}
+                    },
+                    "menus": [
+                        {"name": "김치찌개", "price": 8000, "index": 0, "images": []}
+                    ]
+                }
+            }
+        ]
+        
+        menu_docs, place_docs = process_restaurant_data(restaurant_data)
+        
+        self.assertEqual(len(place_docs), 1)
+        self.assertGreater(len(menu_docs), 0)
+
+
 class APIFunctionTests(TestCase):
     
     def test_create_sample_request(self):
@@ -1752,40 +2111,23 @@ class APIViewExtendedTests(TestCase):
         with self.assertRaises(Exception):
             view = RecommendationAPIView()
     
-    @patch('recommendation_system.api.RecommendationEngine')
-    @patch('recommendation_system.api.VectorIndexBuilder')
-    @patch('recommendation_system.api.EmbeddingService')
-    @patch('recommendation_system.api.UserPreference.objects')
-    def test_recommend_menu_with_user_preference(self, mock_pref_objects, mock_embedding, mock_builder, mock_engine):
+    def test_recommend_menu_api_requires_auth(self):
+        """메뉴 추천 API 인증 필요 테스트"""
         from .api import recommend_menu
         from rest_framework.test import APIRequestFactory
-        from users.models import User
-        
-        user = User.objects.create_user(username='testuser', email='test@test.com', password='pass')
-        
-        mock_pref = Mock()
-        mock_pref.spicy_level = 3
-        mock_pref.sweet_level = 2
-        mock_pref.salty_level = 4
-        mock_pref.allergies = ['땅콩']
-        mock_pref.disliked_ingredients = ['고수']
-        mock_pref.favorite_cuisines = ['한식']
-        mock_pref_objects.get.return_value = mock_pref
-        
-        mock_engine_instance = Mock()
-        mock_engine_instance.search_menu.return_value = []
-        mock_engine.return_value = mock_engine_instance
+        from django.contrib.auth.models import AnonymousUser
         
         factory = APIRequestFactory()
         request = factory.post('/api/recommendation_system/recommend/menu/', {
             'user_location': [127.0, 37.5],
             'query_text': '김치찌개'
         }, format='json')
-        request.user = user
+        request.user = AnonymousUser()
         
         response = recommend_menu(request)
         
-        self.assertEqual(response.status_code, 200)
+        # 인증되지 않은 요청은 401 또는 403 반환
+        self.assertIn(response.status_code, [401, 403])
     
     @patch('recommendation_system.api.RecommendationEngine')
     @patch('recommendation_system.api.VectorIndexBuilder')

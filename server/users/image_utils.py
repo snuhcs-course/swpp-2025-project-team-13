@@ -3,16 +3,46 @@ from urllib.parse import unquote, urlparse
 from config.settings import AWS_STORAGE_BUCKET_NAME, S3_CLIENT
 import torch
 from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
 from io import BytesIO
+import os
 
 # =====================
-# Setup
+# Setup (Lazy Loading)
 # =====================
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model_name = "openai/clip-vit-base-patch32"
-model = CLIPModel.from_pretrained(model_name).to(device)
-processor = CLIPProcessor.from_pretrained(model_name)
+
+# 모델과 프로세서는 lazy loading으로 처리
+_model = None
+_processor = None
+
+def _get_model():
+    global _model
+    if _model is None:
+        # 테스트 환경에서는 모델 로딩 건너뛰기
+        if os.environ.get('DJANGO_TESTING', '') == 'true':
+            return None
+        try:
+            from transformers import CLIPModel
+            _model = CLIPModel.from_pretrained(model_name).to(device)
+        except Exception as e:
+            print(f"CLIP 모델 로드 실패: {e}")
+            return None
+    return _model
+
+def _get_processor():
+    global _processor
+    if _processor is None:
+        # 테스트 환경에서는 프로세서 로딩 건너뛰기
+        if os.environ.get('DJANGO_TESTING', '') == 'true':
+            return None
+        try:
+            from transformers import CLIPProcessor
+            _processor = CLIPProcessor.from_pretrained(model_name, use_fast=True)
+        except Exception as e:
+            print(f"CLIP 프로세서 로드 실패: {e}")
+            return None
+    return _processor
 
 
 def _extract_s3_key(url: str) -> str:
@@ -53,6 +83,13 @@ def _predict_category_from_bytes(image_bytes: bytes, categories: list[str]) -> t
     Returns:
         (predicted_category, confidence)
     """
+    model = _get_model()
+    processor = _get_processor()
+    
+    # 모델이 로드되지 않은 경우 기본값 반환
+    if model is None or processor is None:
+        return ("unknown", 0.0)
+    
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
 
     texts = [f"a photo of {c}" for c in categories]

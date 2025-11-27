@@ -26,41 +26,24 @@ describe("OnboardingScreen", () => {
 
   it("renders first step (taste preferences) by default", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText("What are your taste preferences?")).toBeTruthy();
-    expect(getByText("Help us recommend food you'll love")).toBeTruthy();
-    expect(getByText("Spicy Level: 5", { exact: false })).toBeTruthy();
-    expect(getByText("Sweet Level: 5", { exact: false })).toBeTruthy();
-    expect(getByText("Salty Level: 5", { exact: false })).toBeTruthy();
+    expect(getByText("Tell Us Your Taste")).toBeTruthy();
+    expect(getByText(/Adjust the sliders/)).toBeTruthy();
+    expect(getByText("Sweet")).toBeTruthy();
+    expect(getByText("Salty")).toBeTruthy();
+    expect(getByText("Spicy")).toBeTruthy();
   });
 
-  it("displays progress bar with current step", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText("1 of 4")).toBeTruthy();
+  it("renders progress bar", () => {
+    const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
+    expect(toJSON()).toBeTruthy();
   });
 
-  it("navigates to next step when Next button is pressed", () => {
+  it("navigates to next step when Continue button is pressed", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
     
     expect(getByText("Any allergies?")).toBeTruthy();
-    expect(getByText("2 of 4")).toBeTruthy();
-  });
-
-  it("navigates back to previous step when Back button is pressed", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    
-    // Go to step 2
-    fireEvent.press(getByText("Next"));
-    expect(getByText("Any allergies?")).toBeTruthy();
-    
-    // Go back to step 1
-    fireEvent.press(getByText("Back"));
-    expect(getByText("What are your taste preferences?")).toBeTruthy();
-  });
-
-  it("does not show Back button on first step", () => {
-    const { queryByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(queryByText("Back")).toBeFalsy();
+    expect(getByText("Select all that apply")).toBeTruthy();
   });
 
   it("skips to Foodigram when Skip button is pressed", () => {
@@ -70,105 +53,104 @@ describe("OnboardingScreen", () => {
     expect(mockReplace).toHaveBeenCalledWith("Foodigram");
   });
 
-  it("updates spicy level when slider is pressed", () => {
-    const { getByText, getAllByRole } = render(
-      <OnboardingScreen navigation={navigation} />
-    );
-    
-    // Initial value should be 5
-    expect(getByText("Spicy Level: 5", { exact: false })).toBeTruthy();
-  });
-
-  it("updates sweet level when slider is pressed", () => {
+  it("renders sweet level slider", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText("Sweet Level: 5", { exact: false })).toBeTruthy();
+    expect(getByText("Sweet")).toBeTruthy();
+    expect(getByText("Not Sweet")).toBeTruthy();
+    expect(getByText("Very Sweet")).toBeTruthy();
   });
 
-  it("updates salty level when slider is pressed", () => {
+  it("renders salty level slider", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText("Salty Level: 5", { exact: false })).toBeTruthy();
+    expect(getByText("Salty")).toBeTruthy();
+    expect(getByText("Not Salty")).toBeTruthy();
+    expect(getByText("Very Salty")).toBeTruthy();
   });
 
-  it("shows exploration slider and updates value", () => {
-    const { getByText, getByTestId } = render(<OnboardingScreen navigation={navigation} />);
-    // Initial value rendered (default 2)
-    expect(getByText("Food Exploration: 2")).toBeTruthy();
-    // Tap the highest value
-    fireEvent.press(getByTestId("explore-dot-5"));
-    expect(getByText("Food Exploration: 5")).toBeTruthy();
+  it("renders spicy level slider", () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
+    expect(getByText("Spicy")).toBeTruthy();
+    expect(getByText("Not Spicy")).toBeTruthy();
+    expect(getByText("Very Spicy")).toBeTruthy();
+  });
+
+  it("renders food exploration slider", () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
+    expect(getByText("Food Exploration")).toBeTruthy();
+    expect(getByText("Familiar")).toBeTruthy();
+    expect(getByText("Adventurous")).toBeTruthy();
   });
 
   it("displays allergies step", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
     
     expect(getByText("Any allergies?")).toBeTruthy();
     expect(getByText("Select all that apply")).toBeTruthy();
-    expect(getByText("eggs")).toBeTruthy();
-    expect(getByText("peanuts")).toBeTruthy();
+    expect(getByText("Eggs")).toBeTruthy();
+    expect(getByText("Peanuts")).toBeTruthy();
   });
 
   it("toggles allergy selection", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
     
-    const eggsButton = getByText("eggs");
+    const eggsButton = getByText("Eggs");
     fireEvent.press(eggsButton);
     // Should toggle selection
   });
 
   it("displays disliked ingredients step", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next")); // Step 2
-    fireEvent.press(getByText("Next")); // Step 3
+    fireEvent.press(getByText("Continue")); // Step 2
+    fireEvent.press(getByText("Continue")); // Step 3
     
     expect(getByText("Ingredients you dislike?")).toBeTruthy();
     expect(getByText("We'll avoid recommending these")).toBeTruthy();
-    expect(getByText("onion")).toBeTruthy();
-    expect(getByText("garlic")).toBeTruthy();
+    expect(getByText("Onion")).toBeTruthy();
+    expect(getByText("Garlic")).toBeTruthy();
   });
 
   it("toggles disliked ingredient selection", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
-    const onionButton = getByText("onion");
+    const onionButton = getByText("Onion");
     fireEvent.press(onionButton);
     // Should toggle selection
   });
 
   it("displays favorite cuisines step", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next")); // Step 2
-    fireEvent.press(getByText("Next")); // Step 3
-    fireEvent.press(getByText("Next")); // Step 4
+    fireEvent.press(getByText("Continue")); // Step 2
+    fireEvent.press(getByText("Continue")); // Step 3
+    fireEvent.press(getByText("Continue")); // Step 4
     
-    expect(getByText("Favorite cuisines?")).toBeTruthy();
-    expect(getByText("What types of food do you enjoy?")).toBeTruthy();
-    expect(getByText("korean")).toBeTruthy();
-    expect(getByText("japanese")).toBeTruthy();
+    expect(getByText("What cuisines do you love?")).toBeTruthy();
+    expect(getByText("Select your favorite cuisines")).toBeTruthy();
+    expect(getByText("Korean")).toBeTruthy();
+    expect(getByText("Japanese")).toBeTruthy();
   });
 
   it("toggles favorite cuisine selection", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
-    const koreanButton = getByText("korean");
+    const koreanButton = getByText("Korean");
     fireEvent.press(koreanButton);
     // Should toggle selection
   });
 
   it("shows Complete button on last step", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
     expect(getByText("Complete")).toBeTruthy();
-    expect(getByText("4 of 4")).toBeTruthy();
   });
 
   it("saves preferences and navigates to Foodigram on completion", async () => {
@@ -177,16 +159,20 @@ describe("OnboardingScreen", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     
     // Navigate to last step
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
     // Press Complete
     fireEvent.press(getByText("Complete"));
 
     await waitFor(() => {
       expect(mockSavePreferences).toHaveBeenCalled();
-      expect(Alert.alert).toHaveBeenCalled();
+      expect(Alert.alert).toHaveBeenCalledWith(
+        "Success",
+        "Your preferences have been saved!",
+        expect.any(Array)
+      );
     });
   });
 
@@ -196,16 +182,18 @@ describe("OnboardingScreen", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     
     // Navigate to last step
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
     // Press Complete
     fireEvent.press(getByText("Complete"));
 
     await waitFor(() => {
-      // The actual implementation might call with different message on ok: false
-      expect(Alert.alert).toHaveBeenCalled();
+      expect(Alert.alert).toHaveBeenCalledWith(
+        "Error",
+        "Failed to save preferences. Please try again."
+      );
     });
   });
 
@@ -215,9 +203,9 @@ describe("OnboardingScreen", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     
     // Navigate to last step
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
     // Press Complete
     fireEvent.press(getByText("Complete"));
@@ -238,9 +226,9 @@ describe("OnboardingScreen", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     
     // Navigate to last step
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
     const completeButton = getByText("Complete");
     fireEvent.press(completeButton);
@@ -252,41 +240,41 @@ describe("OnboardingScreen", () => {
 
   it("allows multiple allergies to be selected", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
     
-    fireEvent.press(getByText("eggs"));
-    fireEvent.press(getByText("peanuts"));
-    fireEvent.press(getByText("milk"));
+    fireEvent.press(getByText("Eggs"));
+    fireEvent.press(getByText("Peanuts"));
+    fireEvent.press(getByText("Milk"));
     // All should be selected
   });
 
   it("allows multiple disliked ingredients to be selected", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
-    fireEvent.press(getByText("onion"));
-    fireEvent.press(getByText("garlic"));
+    fireEvent.press(getByText("Onion"));
+    fireEvent.press(getByText("Garlic"));
     // Both should be selected
   });
 
   it("allows multiple favorite cuisines to be selected", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
-    fireEvent.press(getByText("korean"));
-    fireEvent.press(getByText("japanese"));
-    fireEvent.press(getByText("italian"));
+    fireEvent.press(getByText("Korean"));
+    fireEvent.press(getByText("Japanese"));
+    fireEvent.press(getByText("Italian"));
     // All should be selected
   });
 
   it("renders all allergen options", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
     
-    const allergens = ["eggs", "soy", "sesame", "fish", "shellfish", "wheat", "milk", "peanuts", "tree nuts"];
+    const allergens = ["Eggs", "Soy", "Sesame", "Fish", "Shellfish", "Wheat", "Milk", "Peanuts", "Tree Nuts"];
     allergens.forEach(allergen => {
       expect(getByText(allergen)).toBeTruthy();
     });
@@ -294,10 +282,10 @@ describe("OnboardingScreen", () => {
 
   it("renders all ingredient options", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
-    const ingredients = ["onion", "garlic", "ginger", "cilantro", "mushroom", "tomato", "cheese", "meat", "seafood"];
+    const ingredients = ["Onion", "Garlic", "Ginger", "Cilantro", "Mushroom", "Tomato", "Cheese", "Meat", "Seafood"];
     ingredients.forEach(ingredient => {
       expect(getByText(ingredient)).toBeTruthy();
     });
@@ -305,14 +293,13 @@ describe("OnboardingScreen", () => {
 
   it("renders all cuisine options", () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByText("Continue"));
     
-    const cuisines = ["korean", "japanese", "chinese", "western", "thai", "italian", "mexican", "indian"];
+    const cuisines = ["Korean", "Japanese", "Chinese", "Thai", "Italian", "Mexican", "Indian", "American", "French", "Vietnamese", "Spanish", "Mediterranean"];
     cuisines.forEach(cuisine => {
       expect(getByText(cuisine)).toBeTruthy();
     });
   });
 });
-

@@ -21,6 +21,13 @@ jest.doMock("react-native", () => {
           ) => success(100, 100),
         ),
       },
+      Linking: {
+        canOpenURL: jest.fn().mockResolvedValue(true),
+        openURL: jest.fn().mockResolvedValue(undefined),
+        addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+        removeEventListener: jest.fn(),
+        getInitialURL: jest.fn().mockResolvedValue(null),
+      },
     },
     ReactNative,
   )
@@ -86,6 +93,8 @@ jest.mock("lucide-react-native", () => ({
   Check: "Check",
   Plus: "Plus",
   Minus: "Minus",
+  Eye: "Eye",
+  EyeOff: "EyeOff",
 }))
 
 jest.mock("../app/i18n/i18n.ts", () => ({

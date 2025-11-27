@@ -31,6 +31,12 @@
         "image": "./assets/images/splash-logo-android-universal.png",
         "resizeMode": "contain",
         "backgroundColor": "#191015"
+      },
+      "softwareKeyboardLayoutMode": "pan",
+      "navigationBar": {
+        "visible": "leanback",
+        "barStyle": "light-content",
+        "backgroundColor": "#00000000"
       }
     },
     "ios": {

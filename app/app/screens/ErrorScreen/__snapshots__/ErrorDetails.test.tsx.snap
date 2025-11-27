@@ -1,0 +1,111 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`ErrorDetails renders all sections in correct order 1`] = `
+<View>
+  <View
+    style={
+      {
+        "alignItems": "center",
+        "flex": 1,
+      }
+    }
+  >
+    <Text>
+      ladybug
+    </Text>
+    <Text
+      preset="subheading"
+      style={
+        {
+          "color": "#C03403",
+          "marginBottom": 16,
+        }
+      }
+    >
+      Error
+    </Text>
+    <Text>
+      Something went wrong
+    </Text>
+  </View>
+  <RCTScrollView
+    contentContainerStyle={
+      {
+        "padding": 16,
+      }
+    }
+    style={
+      {
+        "backgroundColor": "#D7CEC9",
+        "borderRadius": 6,
+        "flex": 2,
+        "marginVertical": 16,
+      }
+    }
+  >
+    <View>
+      <Text
+        style={
+          {
+            "color": "#C03403",
+          }
+        }
+        weight="bold"
+      >
+        Error: Test error message
+      </Text>
+      <Text
+        selectable={true}
+        style={
+          {
+            "color": "#564E4A",
+            "marginTop": 16,
+          }
+        }
+      >
+        at Component (path/to/component.tsx:10:5)
+      </Text>
+    </View>
+  </RCTScrollView>
+  <View
+    accessibilityState={
+      {
+        "busy": undefined,
+        "checked": undefined,
+        "disabled": undefined,
+        "expanded": undefined,
+        "selected": undefined,
+      }
+    }
+    accessibilityValue={
+      {
+        "max": undefined,
+        "min": undefined,
+        "now": undefined,
+        "text": undefined,
+      }
+    }
+    accessible={true}
+    collapsable={false}
+    focusable={true}
+    onClick={[Function]}
+    onResponderGrant={[Function]}
+    onResponderMove={[Function]}
+    onResponderRelease={[Function]}
+    onResponderTerminate={[Function]}
+    onResponderTerminationRequest={[Function]}
+    onStartShouldSetResponder={[Function]}
+    style={
+      {
+        "backgroundColor": "#C03403",
+        "opacity": 1,
+        "paddingHorizontal": 48,
+      }
+    }
+  >
+    <Text>
+      Reset App
+    </Text>
+  </View>
+</View>
+`;

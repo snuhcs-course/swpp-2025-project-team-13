@@ -454,3 +454,72 @@ class RestaurantSerializerTests(TestCase):
         self.assertEqual(data['price'], "10000.00")
         self.assertIn('image_url', data)
 
+
+class RestaurantViewTests(TestCase):
+    """RestaurantViewSet view 직접 테스트"""
+    
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='viewtestuser',
+            password='testpass123',
+            email='viewtest@example.com'
+        )
+        self.restaurant = Restaurant.objects.create(
+            name="뷰테스트 식당",
+            address="서울시 테스트구",
+            source="view_test_source"
+        )
+    
+    def test_get_serializer_class_list(self):
+        """목록 조회 시 RestaurantSerializer 사용"""
+        from .views import RestaurantViewSet
+        
+        view = RestaurantViewSet()
+        view.action = 'list'
+        
+        from .serializers import RestaurantSerializer
+        self.assertEqual(view.get_serializer_class(), RestaurantSerializer)
+    
+    def test_get_serializer_class_retrieve(self):
+        """상세 조회 시 RestaurantDetailSerializer 사용"""
+        from .views import RestaurantViewSet
+        
+        view = RestaurantViewSet()
+        view.action = 'retrieve'
+        
+        from .serializers import RestaurantDetailSerializer
+        self.assertEqual(view.get_serializer_class(), RestaurantDetailSerializer)
+    
+    def test_permission_required(self):
+        """인증 필요 테스트"""
+        response = self.client.get(reverse('restaurants-list'))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class MenuModelTests(TestCase):
+    """Menu 모델 테스트"""
+    
+    def test_menu_creation(self):
+        """Menu 생성 테스트"""
+        from menu.models import Menu
+        
+        menu = Menu.objects.create(
+            name="테스트 메뉴",
+            category="한식"
+        )
+        
+        self.assertEqual(menu.name, "테스트 메뉴")
+        self.assertEqual(menu.category, "한식")
+    
+    def test_menu_fields(self):
+        """Menu 필드 테스트"""
+        from menu.models import Menu
+        
+        menu = Menu.objects.create(
+            name="스트링 테스트 메뉴",
+            category="중식"
+        )
+        
+        self.assertEqual(menu.name, "스트링 테스트 메뉴")
+        self.assertEqual(menu.category, "중식")

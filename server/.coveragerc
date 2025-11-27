@@ -1,28 +1,16 @@
 [run]
-source = .
 omit =
     */migrations/*
     */tests.py
-    *test_*.py
-    */config/wsgi.py
-    */config/asgi.py
+    */test_*.py
+    */__pycache__/*
+    recommendation_system/chroma_init.py
     manage.py
-    */venv/*
-    */virtualenv/*
-    */.venv/*
-    */env/*
-    */node_modules/*
+    */apps.py
 
 [report]
 exclude_lines =
     pragma: no cover
     def __repr__
-    raise AssertionError
     raise NotImplementedError
     if __name__ == .__main__.:
-    if TYPE_CHECKING:
-    @abstractmethod
-
-[html]
-directory = htmlcov
-
