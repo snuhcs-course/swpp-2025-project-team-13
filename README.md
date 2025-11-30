@@ -1,4 +1,4 @@
-# Foodigram - Iteration 2 Demo
+# Foodigram - Iteration 5 Demo
 
 ## 📱 Project Overview
 
@@ -9,70 +9,92 @@
 ### Prerequisites
 
 - **Node.js**: 18+ (recommended: 20+)
-- **Python**: 3.8+
+- **Python**: 3.13+ 
 - **uv**: Python package manager
 - **Android SDK**: minimum version 23
 - **JDK**: 17 (for Gradle)
 - **adb**: for Android device/emulator connection
 
-# AWS setup
+### Optional: AWS Setup (if using AWS services)
 
 ```bash
 pip install awscli
-aws configure # and then enter AWS credentials in .env.dev
+aws configure # Enter AWS credentials in .env.dev
 
 cd app
 npm install -g @aws-amplify/cli
 amplify pull --appId dhwiac5kwn2e4 --envName dev
 ```
 
-## Native modules required
+### Native Modules (Pre-installed)
+
+The following native modules are already configured:
+
+- **expo-image-picker**: Gallery multi-select for photo uploads
+- **expo-location**: Location services for onboarding
 
 ```bash
-- expo-image-picker (gallery multi-select for “10장 업로드”)
-- expo-location (온보딩 위치 사용)
-
-cd app
-npm config set legacy-peer-deps true
+cd app/
 npx expo install expo-image-picker expo-location
 ```
 
 ### Backend Setup
 
 ```bash
-# Turn on postgresql docker
-cd server/psql/settings
-docker compose up -d
+# Navigate to server directory
+cd server/
 
-# Turn on django server
-cd ../.. # now at server
-uv sync
-uv run python manage.py migrate
-uv run python manage.py createsuperuser  # Required for authentication
-uv run python manage.py runserver
+# Set up virtual environment and dependencies
+psource venv/bin/activate  # Activate virtual environment
+uv sync                    # Install dependencies with uv
+
+# Database setup
+python manage.py makemigrations  # Create database migrations
+python manage.py migrate         # Apply migrations
+python manage.py createsuperuser # Create admin user (required for authentication)
+
+# Start development server
+python manage.py runserver       # Start Django development server
 ```
 
 ### Frontend Setup
 
 ```bash
-# Java 17 required
-cd app
+cd app/
+
+# Install dependencies
 npm install
-npx expo prebuild
-npm run android
+
+# Development
+npm start              # Start Expo development server
+npm run android        # Run on Android
+npm run ios           # Run on iOS
+npm run web           # Run on web
+
+# Code Quality
+npm run lint          # Run ESLint and Prettier
+npm run compile       # TypeScript type checking
+npm test              # Run Jest tests
 ```
 
 ### Device Connection
 
-For physical Android device:
+For physical Android device (if login fails with NETWORK_ERROR):
 
 ```bash
-adb reverse tcp:8000 tcp:8000
+adb reverse tcp:8000 tcp:8000  # Port forwarding for Django backend
 ```
+
+### Important Notes
+
+- **react-native-svg version**: Currently using v15.2.0, but note that <15 (use ~14.1.0) is recommended to avoid Android rendering issues with RNSVGPath components
+- **Port forwarding**: Expo CLI doesn't auto-configure port forwarding for custom backend ports, so manual setup is required
+- **Authentication**: Custom User model is configured with unique email authentication
+- **Development stage**: Both frontend and backend are in early development with basic functionality
 
 ## 🎯 Demo Features
 
-https://github.com/user-attachments/assets/22d484f0-d6fc-4e7c-a7cb-571468e34619
+https://drive.google.com/file/d/1tlHzBuI8_7rsfAoKKlqrYBgL7qWDTa4s/view?usp=sharing
 
 ### Core Functionality
 
@@ -152,21 +174,26 @@ https://github.com/user-attachments/assets/22d484f0-d6fc-4e7c-a7cb-571468e34619
 
 ### Frontend
 
-- **React Native**: Cross-platform mobile app
+- **React Native**: Cross-platform mobile app built with Expo
 - **Expo**: Development and deployment platform
-- **TypeScript**: Type safety
-- **MobX**: State management
-- **TensorFlow.js**: Client-side ML
+- **TypeScript**: Type safety with strict mode
+- **MobX State Tree (MST)**: State management
+- **React Navigation v6**: Navigation system
+- **TensorFlow.js**: Client-side ML for food image analysis
+- **Ignite**: React Native boilerplate structure
+- **i18n-js**: Internationalization support
 
 ### Backend
 
-- **Django**: Web framework
-- **Django REST Framework**: API development
-- **ChromaDB**: Vector database
-- **Sentence Transformers**: Text embedding
+- **Django 5.2.6**: Web framework
+- **Django REST Framework**: RESTful API with ViewSets
+- **Sentence Transformers**: Korean text embedding
 - **scikit-learn**: Machine learning utilities
+- **Custom User Model**: Extended AbstractUser with email authentication
+- **Session Authentication**: Django session-based auth
+- **PostgreSQL**: Production database (Docker)
+- **uv**: Modern Python package manager
 
 ### Database
 
-- **SQLite**: Relational database
-- **ChromaDB**: Vector search engine
+- **PostgreSQL**: Production database (Docker)
