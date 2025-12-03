@@ -539,8 +539,7 @@ def derive_preferred_categories_from_scraps(user_id: int, top_k: int = 3, min_co
         logger.info(f"스크랩 기반 선호 카테고리(user_id={user_id}): {top_categories}")
     return top_categories
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@require_http_methods(["POST"])
 def recommend_menu(request):
     """메뉴 추천 API - Using StreamingHttpResponse with proper chunking for real-time delivery"""
     # Manually check authentication

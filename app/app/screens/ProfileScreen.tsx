@@ -453,40 +453,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = observer(function Pro
     <View style={$container}>
       <ScrollView style={$scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Section */}
-        <View style={$profileSectionHorizontal}>
-          <TouchableOpacity testID="profile-logout-button" onPress={() => setLogoutConfirmationVisible(true)}>
-            <View>
-              <Text style={$userNameHorizontal}>{user.name}</Text>
-              {showLocationCoordinates && (
-                <Text style={$coordinatesText}>
-                  {isLocationLoading 
-                    ? `현위치: 위치를 조회하는 중${locationLoadingDots}`
-                    : isLocationRestricted 
-                      ? "현위치: 위치 정보 사용 제한"
-                      : userCoordinates 
-                        ? `현위치: ${userCoordinates[1].toFixed(6)}, ${userCoordinates[0].toFixed(6)}`
-                        : "현위치: 위치를 조회하는 중"
-                  }
-                </Text>
-              )}
-            </View>
-          </TouchableOpacity>
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <TouchableOpacity
-              testID="personalization-button"
-              style={$iconButtonSquare}
-              onPress={() => setIsPreferencesModalVisible(true)}
-            >
-              <User size={24} color={colors.palette.neutral700} strokeWidth={2} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="settings-button"
-              style={$iconButtonSquare}
-              onPress={() => setIsSettingsModalVisible(true)}
-            >
-              <Settings size={24} color={colors.palette.neutral700} strokeWidth={2} />
-            </TouchableOpacity>
+        <View style={$profileSection}>
+          <View style={$profileImageContainer}>
+            <Image
+              style={$profileImage}
+              resizeMode="cover"
+            />
           </View>
+          <Text style={$userName}>{user.name}</Text>
+
+          <TouchableOpacity
+            testID="settings-button"
+            style={$editButton}
+            onPress={() => setIsPreferencesModalVisible(true)}
+          >
+            <Text style={$editButtonText}>취향 설정</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Content */}

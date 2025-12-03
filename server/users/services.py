@@ -5,7 +5,6 @@ import logging
 
 from users.image_utils import get_food_image_with_alternatives, get_food_image_with_alternatives_from_bytes
 from .models import User, Profile, Follow, UserGalleryImage
-from .image_utils import _read_image_from_s3, get_clip_embedding_from_bytes, get_food_image_category, normalize_to_onboarding_category
 
 logger = logging.getLogger(__name__)
 
@@ -107,27 +106,6 @@ def upload_user_photo(*, user: User, photo_url: str, local_uri: str, image_bytes
             # Continue without label - don't fail the upload
     else:
         logger.debug(f"Skipped CLIP labeling for image {photo.id} (no image bytes provided)")
-
-    return photo
-
-def upload_user_photo_with_embedding(*, user: User, photo_url: str):
-    img_bytes = _read_image_from_s3(photo_url)
-    emb = get_clip_embedding_from_bytes(img_bytes)
-
-    # 카테고리 예측은 실패해도 무시(임베딩 저장은 계속 수행)
-    try:
-        raw_category, _ = get_food_image_category(photo_url)
-    except Exception:
-        raw_category = None
-    _, category_label = normalize_to_onboarding_category(raw_category or "")
-
-    photo = UserGalleryImage.objects.create(
-        user=user,
-        image_url=photo_url,
-        ai_label=raw_category or "",
-        category_tag=category_label,
-        embedding=emb,
-    )
 
     return photo
 
