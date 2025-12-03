@@ -379,7 +379,8 @@ class RecommendationReranker:
             # 추천 사유 생성
             final_results = []
             for item, score in reranked_items:
-                reason = self._generate_recommendation_reason(item, context)
+                # reason = self._generate_recommendation_reason(item, context)
+                reason = None  # Temporarily disabled reason generation
                 final_results.append((item, score, reason))
             
             return final_results

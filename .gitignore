@@ -50,3 +50,7 @@ docs/_build/server/chroma_db
 
 # custom run script
 build-app.sh
+
+# Docs
+Design_Document.md
+Requirements_Specifications.md

@@ -117,21 +117,34 @@ const AppStack = observer(function AppStack() {
           setIsLoggedIn(true)
         } else {
           // Session is invalid - remove flag and logout
-          await storage.remove("IS_LOGGED_IN")
-          await rootStore.clearUserData()
+          // Only clear user data if we were previously logged in
+          if (isLoggedIn === true) {
+            await storage.remove("IS_LOGGED_IN")
+            await rootStore.clearUserData()
+          } else {
+            await storage.remove("IS_LOGGED_IN")
+          }
           setIsLoggedIn(false)
         }
       } catch (error) {
         // Network error or other issues - safely logout
-        await storage.remove("IS_LOGGED_IN")
-        await rootStore.clearUserData()
+        // Only clear user data if we were previously logged in
+        if (isLoggedIn === true) {
+          await storage.remove("IS_LOGGED_IN")
+          await rootStore.clearUserData()
+        } else {
+          await storage.remove("IS_LOGGED_IN")
+        }
         setIsLoggedIn(false)
       }
     } else {
-      await rootStore.clearUserData()
+      // Only clear user data once when transitioning from logged in to logged out
+      if (isLoggedIn === true) {
+        await rootStore.clearUserData()
+      }
       setIsLoggedIn(false)
     }
-  }, [rootStore])
+  }, [rootStore, isLoggedIn])
 
   useEffect(() => {
     // Check login status on mount

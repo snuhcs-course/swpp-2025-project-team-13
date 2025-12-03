@@ -222,6 +222,31 @@ export class Api {
     return this.apisauce.delete(`/scraps/${scrapId}/`)
   }
 
+  // NEW AWS Scrap Storage Methods
+  async uploadUserScrapsToAWS(scraps: any[]) {
+    // Upload user's scraped menus to AWS storage on logout
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.post("/scraps/upload-to-aws/", { scraps })
+  }
+
+  async downloadUserScrapsFromAWS() {
+    // Download user's scraped menus from AWS storage on login
+    // ensure csrf header is present; get it if missing
+    // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+    return this.apisauce.get("/scraps/download-from-aws/")
+  }
+
   async getRestaurantDetail(restaurantId: number) {
     // ensure csrf header is present; get it if missing
     // @ts-ignore - apisauce has no typed way to read headers set, so we check via getHeader
@@ -627,6 +652,65 @@ export class Api {
       console.error('❌ Streaming request error:', error)
       throw new Error(`Streaming request failed: ${error}`)
     }
+  }
+
+  // Phase 1: Get menu recommendations without reasons
+  async getMenuRecommendationsPhase1(userLocation: [number, number], options?: {
+    queryText?: string
+    maxResults?: number
+  }) {
+    // ensure csrf header is present; get it if missing
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+
+    const requestData = {
+      user_location: userLocation,
+      ...options
+    }
+
+    return this.apisauce.post("/recommendation/recommend/menu/phase1/", requestData)
+  }
+
+  // Phase 2: Get recommendation reasons for specific menus
+  async getMenuRecommendationsPhase2(userLocation: [number, number], menuIds: string[], options?: {
+    queryText?: string
+  }) {
+    // ensure csrf header is present; get it if missing
+    const header = (this.apisauce as any).defaults?.headers?.common?.["X-CSRFToken"]
+    if (!header) {
+      await this.getCsrf()
+    }
+    await this.attachCookiesHeader()
+
+    const requestData = {
+      user_location: userLocation,
+      menu_ids: menuIds,
+      ...options
+    }
+
+    if (__DEV__) {
+      console.log('📤 Phase 2 API request:', {
+        url: '/recommendation/recommend/menu/phase2/',
+        menuIdsCount: menuIds.length,
+        requestData: JSON.stringify(requestData).substring(0, 200) + '...'
+      })
+    }
+
+    const response = await this.apisauce.post("/recommendation/recommend/menu/phase2/", requestData)
+    
+    if (__DEV__) {
+      console.log('📥 Phase 2 API response:', {
+        status: response.status,
+        ok: response.ok,
+        problem: response.problem,
+        dataKeys: response.data ? Object.keys(response.data) : null
+      })
+    }
+    
+    return response
   }
 
 }

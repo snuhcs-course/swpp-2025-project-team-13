@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient"
-import { Bookmark, Home, User, Search, X, UtensilsCrossed } from "lucide-react-native"
+import { Bookmark, Home, User, Search, X } from "lucide-react-native"
 import { observer } from "mobx-react-lite"
-import React, { useEffect, useState, useRef, useCallback, startTransition } from "react"
+import React, { useEffect, useState, useRef, useCallback } from "react"
 import * as Location from "expo-location"
 import * as storage from "app/utils/storage"
 import {
@@ -18,7 +18,6 @@ import {
   TextInput,
   Modal,
   Pressable,
-  InteractionManager
 } from "react-native"
 import { ScrapToast, Text } from "../components"
 import { useStores } from "../models"
@@ -37,8 +36,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
   // Recommended menu related states
   const [recommendedMenus, setRecommendedMenus] = useState<MenuRecommendationItem[]>([])
-  const [allFetchedMenus, setAllFetchedMenus] = useState<MenuRecommendationItem[]>([]) // All menus fetched from API
-  const [displayedMenuCount, setDisplayedMenuCount] = useState(0) // How many menus to display (incremental)
+  // Removed: allFetchedMenus, displayedMenuCount - now using simple phase-based approach
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [isImageLoading, setIsImageLoading] = useState<{ [key: string]: boolean }>({})
@@ -47,7 +45,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   const [currentMaxResults, setCurrentMaxResults] = useState(10)
   const [showScrapToast, setShowScrapToast] = useState(false)
   const flatListRef = useRef<FlatList>(null)
-  const incrementalDisplayTimerRef = useRef<NodeJS.Timeout | null>(null)
+  // Removed: incrementalDisplayTimerRef - using simple phase-based approach
 
   // Query context related states
   const [showQueryModal, setShowQueryModal] = useState(false)
@@ -69,6 +67,12 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     query: string
     promise: Promise<any>
   } | null>(null)
+
+  // Track current query text for Phase 2
+  const currentQueryTextRef = useRef<string | undefined>(undefined)
+  
+  // Flag to prevent multiple Phase 2 triggers
+  const phase2TriggeredRef = useRef(false)
 
   // Loading animation for recommendations
   const rotationValue = useRef(new Animated.Value(0)).current
@@ -119,7 +123,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
           // Make the actual API request
           // Backend automatically aggregates user's profile image labels
-          await fetchRecommendations(appendVal, queryText)
+          await fetchRecommendationsPhase1(appendVal, queryText)
 
           // Resolve ALL pending promises with the same result
           promises.forEach((p: any) => p.resolve())
@@ -198,155 +202,230 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     }
   }
 
-  // Fetch recommendations function
-  const fetchRecommendations = async (append = false, queryText?: string) => {
-    // Use the current userLocation state (either actual location or default)
-
+  // Phase 1: Fetch menu recommendations without reasons
+  const fetchRecommendationsPhase1 = useCallback(async (append = false, queryText?: string) => {
     const maxResults = append ? currentMaxResults + 10 : 10
     const options: any = { maxResults }
     if (queryText) {
       options.queryText = queryText
     }
 
-    // Create a unique query key for deduplication
-    const queryKey = `${JSON.stringify(userLocation)}_${maxResults}_${queryText || ''}`
+    // Store query text for Phase 2
+    currentQueryTextRef.current = queryText
+    
+    // Reset Phase 2 trigger flag for new recommendations
+    if (!append) {
+      phase2TriggeredRef.current = false
+    }
 
     try {
-      // If there's already a pending request with the same parameters, wait for it instead
-      if (pendingRequestRef.current && pendingRequestRef.current.query === queryKey) {
-        if (__DEV__) {
-          console.log('🔄 Request Deduplication: Reusing existing pending request for', queryKey.substring(0, 50))
-        }
-        return pendingRequestRef.current.promise
-      }
-
-      // Cancel any previous pending request with different parameters
-      if (pendingRequestRef.current) {
-        if (__DEV__) {
-          console.log('⏸️ Cancelling previous request with different parameters')
-        }
-        pendingRequestRef.current = null
-      }
-
-      // Start the new request and track it
       if (__DEV__) {
-        console.log('🚀 Starting streaming recommendation request for', queryKey.substring(0, 50))
+        console.log('🚀 Starting Phase 1: Fetching menu recommendations without reasons')
       }
 
-      // Create pending request holder BEFORE creating the promise
-      // This prevents race condition with concurrent calls
-      const pendingRequest: { query: string; promise: Promise<void> } = {
-        query: queryKey,
-        promise: Promise.resolve() // Placeholder, will be replaced
+      // Show progress message
+      setProgressMessage("당신의 취향을 분석하고 메뉴를 찾는 중입니다")
+      
+      const response = await api.getMenuRecommendationsPhase1(userLocation, options)
+      
+      if (!response.ok) {
+        console.error("Failed to fetch phase 1 recommendations:", response.problem)
+        setHasMoreData(false)
+        return
       }
-      pendingRequestRef.current = pendingRequest
 
-      const promise = (async () => {
-        try {
-          const uniquePlaceMenus: MenuRecommendationItem[] = []
-          const seenPlaceIds = new Set<string>()
-          let totalResults = 0
+      const data: any = response.data
+      const newMenus = data.results || []
 
-          // Stream results one by one
-          for await (const chunk of api.streamMenuRecommendations(userLocation, options)) {
-            if (chunk.type === 'metadata') {
-              totalResults = chunk.total_results
-              if (__DEV__) {
-                console.log(`📊 Expecting ${totalResults} results...`)
-              }
-            } else if (chunk.type === 'result' && chunk.item) {
-              const menu = chunk.item
-              // Filter duplicates by place_name
-              if (menu.image_urls && menu.image_urls.length > 0 && !seenPlaceIds.has(menu.place_name)) {
-                uniquePlaceMenus.push(menu)
-                seenPlaceIds.add(menu.place_name)
+      if (__DEV__) {
+        console.log(`✅ Phase 1 완료: ${newMenus.length}개 메뉴 받음`)
+      }
 
-                if (!append) {
-                  // Incremental: add each menu as it arrives
-                  console.log(`🔄 FRONTEND: Adding menu to state immediately: ${menu.menu_name}`)
-                  setAllFetchedMenus(prev => {
-                    const newState = [...prev, menu]
-                    console.log(`📱 FRONTEND: State updated - now showing ${newState.length} menus`)
-                    return newState
-                  })
-                  setDisplayedMenuCount(prev => Math.min(prev + 1, uniquePlaceMenus.length))
-                }
+      // Hide loading screen and show food images immediately
+      setIsLoadingRecommendations(false)
 
-                if (__DEV__) {
-                  console.log(`🍽️ Received menu ${uniquePlaceMenus.length}: ${menu.menu_name}`)
-                }
-              }
-            } else if (chunk.type === 'progress') {
-              // Update progress message
-              const { message } = chunk
-              if (message) {
-                setProgressMessage(message)
-                if (__DEV__) {
-                  console.log(`📋 Progress update: ${message}`)
-                }
-              }
-            } else if (chunk.type === 'reason_update') {
-              // Update reason for specific menu
-              const { menu_id, reason } = chunk
-              if (menu_id && reason) {
-                setMenuReasons(prev => ({
-                  ...prev,
-                  [menu_id]: reason
-                }))
-                
-                if (__DEV__) {
-                  console.log(`💡 Updated reason for menu ${menu_id}: ${reason}`)
-                }
-              }
-            }
-          }
-
-          if (__DEV__) {
-            console.log('✅ Streaming request completed')
-          }
-
-          if (append) {
-            // For append mode, add all new menus at once
-            const existingIds = new Set(recommendedMenus.map(m => m.id))
-            const newMenus = uniquePlaceMenus.filter(menu => !existingIds.has(menu.id))
-
-            if (newMenus.length === 0) {
-              setHasMoreData(false)
-            } else {
-              setRecommendedMenus(prev => [...prev, ...newMenus])
-              setCurrentMaxResults(maxResults)
-            }
-          } else {
-            // For initial load, we've already been adding incrementally
-            setCurrentMaxResults(10)
-            setHasMoreData(uniquePlaceMenus.length >= 10)
-          }
-        } finally {
-          // Clear the pending request reference once it's done
-          if (pendingRequestRef.current === pendingRequest) {
-            pendingRequestRef.current = null
-          }
+      if (append) {
+        // For append mode, add new menus to existing list
+        const existingIds = new Set(recommendedMenus.map(m => m.id))
+        const uniqueNewMenus = newMenus.filter(menu => !existingIds.has(menu.id))
+        
+        if (uniqueNewMenus.length === 0) {
+          setHasMoreData(false)
+        } else {
+          setRecommendedMenus(prev => [...prev, ...uniqueNewMenus])
+          setCurrentMaxResults(maxResults)
         }
-      })()
+      } else {
+        // For initial load, set new menus and clear loading state
+        setRecommendedMenus(newMenus)
+        setMenuReasons({}) // Clear previous reasons
+        setCurrentMaxResults(10)
+        setHasMoreData(newMenus.length >= 10)
 
-      // Store the actual promise (now created) into the pending request holder
-      pendingRequest.promise = promise
-      await promise
+        // Clear loading dots initially - will use static text until Phase 2 completes
+        setReasonLoadingDots({})
+        
+        // Reset Phase 2 trigger flag and image loaded state for new menus
+        phase2TriggeredRef.current = false
+        setFirstImageLoaded(false)
+      }
+
     } catch (error) {
-      console.error("Failed to fetch recommended menus:", error)
+      console.error("Failed to fetch Phase 1 recommendations:", error)
       setHasMoreData(false)
-      pendingRequestRef.current = null
+      setIsLoadingRecommendations(false)
     }
+  }, [userLocation, currentMaxResults, recommendedMenus])
+
+  // Phase 2: Generate single reason for one menu
+  const generateSingleReason = useCallback(async (menuId: string, queryText?: string) => {
+    try {
+      if (__DEV__) {
+        console.log('🔄 Generating reason for menu:', menuId)
+      }
+
+      const options: any = {}
+      if (queryText) {
+        options.queryText = queryText
+      }
+
+      const response = await api.getMenuRecommendationsPhase2(userLocation, [menuId], options)
+      
+      if (__DEV__) {
+        console.log('📡 Single reason response:', response.status, response.ok ? 'OK' : 'ERROR')
+      }
+      
+      if (!response.ok) {
+        console.error("Failed to fetch single reason:", response.problem)
+        // Clear loading dots for this menu on error
+        setReasonLoadingDots(prev => {
+          const newDots = { ...prev }
+          delete newDots[menuId]
+          return newDots
+        })
+        return
+      }
+
+      const data: any = response.data
+      const reasonUpdates = data.reason_updates || []
+
+      if (reasonUpdates.length > 0) {
+        const update = reasonUpdates[0]
+        const { menu_id, reason } = update
+        
+        // Update reason for this menu
+        setMenuReasons(prev => ({
+          ...prev,
+          [menu_id]: reason
+        }))
+
+        // Clear loading dots for this menu
+        setReasonLoadingDots(prev => {
+          const newDots = { ...prev }
+          delete newDots[menu_id]
+          return newDots
+        })
+
+        if (__DEV__) {
+          console.log('✅ Generated reason for menu', menu_id)
+        }
+      }
+
+    } catch (error) {
+      console.error("Failed to generate single reason:", error)
+      // Clear loading dots on error
+      setReasonLoadingDots(prev => {
+        const newDots = { ...prev }
+        delete newDots[menuId]
+        return newDots
+      })
+    }
+  }, [userLocation])
+
+  // Phase 2: Generate reasons sequentially for all menus
+  const fetchRecommendationsPhase2 = useCallback(async (menuIds: string[], queryText?: string) => {
+    try {
+      if (__DEV__) {
+        console.log('🚀 Starting sequential Phase 2 for', menuIds.length, 'menus')
+      }
+
+      // Set loading dots for all menus first
+      const initialLoadingDots: { [key: string]: string } = {}
+      menuIds.forEach(menuId => {
+        initialLoadingDots[menuId] = "."
+      })
+      setReasonLoadingDots(initialLoadingDots)
+
+      // Generate reasons sequentially (one by one)
+      for (let i = 0; i < menuIds.length; i++) {
+        const menuId = menuIds[i]
+        
+        if (__DEV__) {
+          console.log(`🔄 Sequential Phase 2: ${i + 1}/${menuIds.length} - ${menuId}`)
+        }
+
+        // Generate reason for this menu
+        await generateSingleReason(menuId, queryText)
+        
+        // Small delay between requests to avoid overwhelming the server
+        if (i < menuIds.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+
+      if (__DEV__) {
+        console.log('✅ Sequential Phase 2 completed for all menus')
+      }
+
+    } catch (error) {
+      console.error("Failed to fetch Phase 2 reasons:", error)
+      // Clear loading dots on error
+      setReasonLoadingDots({})
+    }
+  }, [userLocation, generateSingleReason])
+
+  // Track which images have loaded to trigger Phase 2 only once
+  const [firstImageLoaded, setFirstImageLoaded] = useState(false)
+  
+  // Track currently visible menu index for dot animation
+  const [currentVisibleMenuIndex, setCurrentVisibleMenuIndex] = useState(0)
+  
+  // Handle viewport changes to track visible menu
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      // Get the index of the first (most visible) item
+      const newVisibleIndex = viewableItems[0].index || 0
+      setCurrentVisibleMenuIndex(newVisibleIndex)
+    }
+  }, [])
+  
+  const viewabilityConfig = {
+    itemVisiblePercentThreshold: 50, // Menu is considered visible if 50% is showing
   }
+  
+  // Trigger Phase 2 when first food image loads (only once)
+  const triggerPhase2OnImageLoad = useCallback(() => {
+    if (!phase2TriggeredRef.current && !firstImageLoaded && recommendedMenus.length > 0) {
+      phase2TriggeredRef.current = true
+      setFirstImageLoaded(true)
+      
+      if (__DEV__) {
+        console.log('🖼️ First food image loaded - triggering Phase 2 for', recommendedMenus.length, 'menus')
+      }
+      
+      const menuIds = recommendedMenus.map(menu => String(menu.id))
+      fetchRecommendationsPhase2(menuIds, currentQueryTextRef.current)
+    }
+  }, [recommendedMenus, fetchRecommendationsPhase2, firstImageLoaded])
 
   // Load more recommendations
   const loadMoreRecommendations = useCallback(async () => {
     if (isLoadingMore || !hasMoreData) return
     
     setIsLoadingMore(true)
-    await fetchRecommendations(true)
+    await fetchRecommendationsPhase1(true)
     setIsLoadingMore(false)
-  }, [isLoadingMore, hasMoreData])
+  }, [isLoadingMore, hasMoreData, fetchRecommendationsPhase1])
 
   // Fetch recommendations only once on app initialization
   // Using ref to prevent multiple initializations from component re-mounts
@@ -358,15 +437,12 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
     hasInitializedRef.current = true
     setIsLoadingRecommendations(true)
-    setAllFetchedMenus([]) // Clear previous results
-    setDisplayedMenuCount(0)
     setMenuReasons({}) // Clear previous reasons
     setReasonLoadingDots({}) // Clear previous loading dots
     setProgressMessage("당신의 취향을 분석 중입니다") // Reset progress message
 
-    debouncedFetchRecommendations().finally(() => {
-      setIsLoadingRecommendations(false)
-    })
+    debouncedFetchRecommendations()
+    // Note: isLoadingRecommendations is now controlled by phase1 completion
 
     // Cleanup: clear pending requests on unmount
     return () => {
@@ -409,17 +485,13 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           }
           setHasMoreData(true)
           setIsLoadingRecommendations(true)
-          setAllFetchedMenus([]) // Clear previous results
-          setDisplayedMenuCount(0)
-          setMenuReasons({}) // Clear previous reasons
-          setReasonLoadingDots({}) // Clear previous loading dots
+          // Don't clear existing menus/reasons immediately - keep them visible during update
           setProgressMessage("당신의 취향을 분석 중입니다") // Reset progress message
-          debouncedFetchRecommendations().finally(() => {
-            setIsLoadingRecommendations(false)
-          }).catch((error) => {
+          debouncedFetchRecommendations().catch((error) => {
             console.error("Failed to refresh recommendations:", error)
-            setIsLoadingRecommendations(false)
+            setIsLoadingRecommendations(false)  // Only set false on error
           })
+          // Note: isLoadingRecommendations is now controlled by phase1 completion
         } else if (__DEV__) {
           console.log(`❌ Recommendation refresh blocked for trigger: ${trigger}`)
         }
@@ -435,21 +507,55 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     setRefreshing(true)
     setHasMoreData(true)
     setIsLoadingRecommendations(true)
-    setAllFetchedMenus([]) // Clear previous results
-    setDisplayedMenuCount(0)
-    setMenuReasons({}) // Clear previous reasons
-    setReasonLoadingDots({}) // Clear previous loading dots
+    // Don't clear existing menus/reasons immediately - keep them visible during refresh
     setProgressMessage("당신의 취향을 분석 중입니다") // Reset progress message
     // Use debounced version to prevent accidental double-refresh
     debouncedFetchRecommendations(false).finally(() => {
       setRefreshing(false)
-      setIsLoadingRecommendations(false)
+      // Note: isLoadingRecommendations is now controlled by phase1 completion
+    }).catch(() => {
+      setIsLoadingRecommendations(false)  // Only set false on error
     })
   }
 
-  // Handle end reached for infinite scroll
-  const handleEndReached = useCallback(() => {
-    if (hasMoreData && !isLoadingMore && !isLoadingRecommendations && recommendedMenus.length > 0) {
+  // Handle bottom bounce detection for more recommendations
+  const scrollY = useRef(new Animated.Value(0)).current
+  const [isAtBottom, setIsAtBottom] = useState(false)
+  
+  const handleScroll = useCallback((event: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+    const currentScrollY = contentOffset.y
+    const maxScrollY = contentSize.height - layoutMeasurement.height
+    
+    // Check if user is at or very close to bottom
+    const atBottom = currentScrollY >= maxScrollY - 50
+    
+    if (atBottom !== isAtBottom) {
+      setIsAtBottom(atBottom)
+    }
+    
+    // Animate scroll value for potential other uses
+    scrollY.setValue(currentScrollY)
+  }, [scrollY, isAtBottom])
+  
+  // Detect bottom bounce: when user is at bottom and scroll velocity goes negative (bounce up)
+  const handleScrollEndDrag = useCallback((event: any) => {
+    const { contentOffset, contentSize, layoutMeasurement, velocity } = event.nativeEvent
+    const currentScrollY = contentOffset.y
+    const maxScrollY = contentSize.height - layoutMeasurement.height
+    
+    // Check if user bounced at the bottom (at bottom + upward velocity)
+    const atBottom = currentScrollY >= maxScrollY - 50
+    const bounceDetected = atBottom && velocity && velocity.y < -0.5 // Negative velocity = upward bounce
+    
+    if (__DEV__) {
+      console.log('Scroll end drag:', { atBottom, velocityY: velocity?.y, bounceDetected })
+    }
+    
+    if (bounceDetected && hasMoreData && !isLoadingMore && !isLoadingRecommendations && recommendedMenus.length > 0) {
+      if (__DEV__) {
+        console.log('🔄 Bottom bounce detected - loading more recommendations')
+      }
       loadMoreRecommendations()
     }
   }, [hasMoreData, isLoadingMore, isLoadingRecommendations, recommendedMenus.length, loadMoreRecommendations])
@@ -500,59 +606,61 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     }
   }, [isLoadingRecommendations, rotationValue])
 
-  // Animate loading dots for recommendation reasons
+  // Animate loading dots for recommendation reasons (only for currently visible menu)
   useEffect(() => {
-    const intervals: NodeJS.Timeout[] = []
-    
-    // Create interval for each menu that doesn't have a reason yet
-    recommendedMenus.forEach(menu => {
-      if (!menuReasons[menu.id] && !menu.reason) {
-        const interval = setInterval(() => {
-          setReasonLoadingDots(prev => {
-            const currentDots = prev[menu.id] || ""
-            let nextDots = ""
-            
-            if (currentDots === "") nextDots = "."
-            else if (currentDots === ".") nextDots = ".."
-            else if (currentDots === "..") nextDots = "..."
-            else nextDots = ""
-            
-            return { ...prev, [menu.id]: nextDots }
-          })
-        }, 500) // 0.5 second cycle like location loading
-        
-        intervals.push(interval)
-      }
+    if (isLoadingRecommendations || recommendedMenus.length === 0) {
+      return // Don't start intervals if still loading or no menus
+    }
+
+    // Get the currently visible menu
+    const visibleMenu = recommendedMenus[currentVisibleMenuIndex]
+    if (!visibleMenu) {
+      return
+    }
+
+    // Clear dots for all non-visible menus and reset to empty string
+    setReasonLoadingDots(prev => {
+      const newDots: { [key: string]: string } = {}
+      
+      recommendedMenus.forEach((menu, index) => {
+        if (!menuReasons[menu.id] && !menu.reason) {
+          // Only animate the currently visible menu, others get empty string
+          if (index === currentVisibleMenuIndex) {
+            newDots[menu.id] = prev[menu.id] || "" // Keep current animation state
+          } else {
+            newDots[menu.id] = "" // Reset to empty for non-visible menus
+          }
+        }
+      })
+      
+      return newDots
     })
 
-    return () => {
-      intervals.forEach(interval => clearInterval(interval))
-    }
-  }, [recommendedMenus, menuReasons])
+    // Only create animation interval for the currently visible menu if it needs a reason
+    if (!menuReasons[visibleMenu.id] && !visibleMenu.reason) {
+      const interval = setInterval(() => {
+        setReasonLoadingDots(prev => {
+          const currentDots = prev[visibleMenu.id] || ""
+          let nextDots = ""
+          
+          // Cycle through: '' -> '.' -> '..' -> '...' -> '' -> ...
+          if (currentDots === "") nextDots = "."
+          else if (currentDots === ".") nextDots = ".."
+          else if (currentDots === "..") nextDots = "..."
+          else nextDots = ""
+          
+          return { ...prev, [visibleMenu.id]: nextDots }
+        })
+      }, 500)
 
-  // Incremental display: show menus one by one as they are "processed"
-  useEffect(() => {
-    if (displayedMenuCount > 0 && displayedMenuCount <= allFetchedMenus.length) {
-      // Update recommendedMenus with only the first displayedMenuCount items
-      setRecommendedMenus(allFetchedMenus.slice(0, displayedMenuCount))
-
-      // Schedule next item to display after 300ms
-      if (displayedMenuCount < allFetchedMenus.length) {
-        if (incrementalDisplayTimerRef.current) {
-          clearTimeout(incrementalDisplayTimerRef.current)
-        }
-        incrementalDisplayTimerRef.current = setTimeout(() => {
-          setDisplayedMenuCount(prev => prev + 1)
-        }, 300)
+      return () => {
+        clearInterval(interval)
       }
     }
 
-    return () => {
-      if (incrementalDisplayTimerRef.current) {
-        clearTimeout(incrementalDisplayTimerRef.current)
-      }
-    }
-  }, [displayedMenuCount, allFetchedMenus])
+  }, [recommendedMenus.length, isLoadingRecommendations, currentVisibleMenuIndex, menuReasons]) // Add currentVisibleMenuIndex to deps
+
+  // Removed old incremental display logic - now using simple phase-based approach
 
   const toggleBookmark = useCallback(async (menu: MenuRecommendationItem) => {
     const imageUrl = menu.image_urls && menu.image_urls.length > 0 ? menu.image_urls[0] : undefined
@@ -627,12 +735,8 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     setIsProcessingQuery(true)
     setShowQueryModal(false)
 
-    // Clear previous results for food preference search
+    // Don't clear previous results immediately - keep them visible during query search
     setIsLoadingRecommendations(true)
-    setAllFetchedMenus([])
-    setDisplayedMenuCount(0)
-    setMenuReasons({}) // Clear previous reasons
-    setReasonLoadingDots({}) // Clear previous loading dots
     setProgressMessage("당신의 취향을 분석 중입니다") // Reset progress message
 
     try {
@@ -642,7 +746,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
       console.error("Failed to fetch context-aware recommendations:", error)
     } finally {
       setIsProcessingQuery(false)
-      setIsLoadingRecommendations(false)
+      // Note: isLoadingRecommendations is now controlled by phase1 completion
       setQueryContext("")
     }
   }, [queryContext, debouncedFetchRecommendations])
@@ -662,7 +766,11 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         style={[$backgroundImage, { height: screenHeight }]}
         resizeMode="cover"
         onLoadStart={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: true }))}
-        onLoadEnd={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
+        onLoadEnd={() => {
+          setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))
+          // Trigger Phase 2 when first food image loads
+          triggerPhase2OnImageLoad()
+        }}
         onError={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
       >
         {/* Image Loading Indicator */}
@@ -722,20 +830,20 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
               ⭐ {menu.rating} (리뷰 {menu.review_count}개)
             </Text>
             {/* Show loading reason or actual reason */}
-            {menuReasons[menu.id] || menu.reason ? (
+            {(menuReasons[menu.id] && menuReasons[menu.id].trim()) || (menu.reason && menu.reason.trim()) ? (
               <Text style={$menuReasonLarge} numberOfLines={3}>
                 💡 {menuReasons[menu.id] || menu.reason}
               </Text>
             ) : (
               <Text style={$menuReasonLarge} numberOfLines={3}>
-                💡 추천 이유를 생성하는 중{reasonLoadingDots[menu.id] || ""}
+                💡 이유를 생성하는 중{reasonLoadingDots[menu.id] || ""}
               </Text>
             )}
           </View>
         </View>
       </ImageBackground>
     )
-  }, [screenHeight, isImageLoading, toggleBookmark, menuScrapStore.scrappedMenus.length, menuReasons, reasonLoadingDots])
+  }, [screenHeight, isImageLoading, toggleBookmark, menuScrapStore.scrappedMenus.length, menuReasons, reasonLoadingDots, triggerPhase2OnImageLoad])
 
   // Get item layout for performance optimization
   const getItemLayout = useCallback(
@@ -772,6 +880,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
       return (
         <View style={[$loadingContainer, { height: screenHeight }]}>
           <Text style={$loadingText}>근처 맛집을 찾고 있어요...</Text>
+          <Text style={$loadingSubtext}>{progressMessage}</Text>
         </View>
       )
     }
@@ -782,7 +891,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         <Text style={$emptySubtext}>잠시 후 다시 시도해 주세요</Text>
       </View>
     )
-  }, [isLoadingRecommendations, screenHeight])
+  }, [isLoadingRecommendations, progressMessage, screenHeight])
 
   return (
     <View style={$container}>
@@ -795,8 +904,8 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         getItemLayout={getItemLayout}
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={renderFooter}
-        onEndReached={handleEndReached}
-        onEndReachedThreshold={0.5}
+        onScroll={handleScroll}
+        onScrollEndDrag={handleScrollEndDrag}
         extraData={menuScrapStore.scrappedMenus.length}
         refreshControl={
           <RefreshControl
@@ -821,6 +930,8 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         updateCellsBatchingPeriod={50}
         disableIntervalMomentum={true}
         scrollEventThrottle={16}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
       />
 
       {/* Scrap Toast */}
@@ -830,60 +941,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         onNavigate={() => navigation.navigate("Scrap")}
       />
 
-      {/* Loading Overlay - show when recommendations loading */}
-      {isLoadingRecommendations && (
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(255, 255, 255, 0.95)",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 100,
-          }}
-        >
-          <Animated.View
-            style={{
-              transform: [
-                {
-                  rotate: rotationValue.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ["0deg", "360deg"],
-                  }),
-                },
-              ],
-            }}
-          >
-            <UtensilsCrossed
-              size={64}
-              color={colors.palette.primary500}
-              strokeWidth={2}
-            />
-          </Animated.View>
-          <Text
-            style={{
-              fontSize: 18,
-              fontWeight: "600",
-              color: colors.text,
-              marginBottom: 8,
-              marginTop: 24,
-            }}
-          >
-            추천하는 중...
-          </Text>
-          <Text
-            style={{
-              fontSize: 14,
-              color: colors.palette.neutral500,
-            }}
-          >
-            {progressMessage}
-          </Text>
-        </View>
-      )}
+      {/* Removed blocking overlay - users can now interact during loading */}
 
       {/* Floating Search Button */}
       <TouchableOpacity
@@ -1130,6 +1188,12 @@ const $loadingContainer: ViewStyle = {
 const $loadingText: TextStyle = {
   fontSize: 16,
   color: colors.palette.neutral400,
+}
+
+const $loadingSubtext: TextStyle = {
+  fontSize: 14,
+  color: colors.palette.neutral500,
+  marginTop: 8,
 }
 
 const $imageLoadingContainer: ViewStyle = {

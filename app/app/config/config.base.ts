@@ -21,7 +21,7 @@ const BaseConfig: ConfigBaseProps = {
    * This is a list of all the route names that will exit the app if the back button
    * is pressed while in that screen. Only affects Android.
    */
-  exitRoutes: ["Welcome"],
+  exitRoutes: ["Welcome", "Foodigram"],
 }
 
 export default BaseConfig

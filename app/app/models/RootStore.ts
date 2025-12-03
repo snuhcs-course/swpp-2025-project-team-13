@@ -11,43 +11,69 @@ export const RootStoreModel = types.model("RootStore").props({
   _isLoading: types.optional(types.boolean, false),
 }).actions((self) => ({
   async clearUserData() {
-    // Clear user-specific data when user logs out (but preserve scraped menus)
-    console.log("🧹 DEBUG: clearUserData() called - clearing stores but preserving scraped menus")
+    // NEW FLOW: Upload user scraps to AWS storage, then clear all local data
+    console.log("🧹 clearUserData() called - uploading scraps to AWS then clearing all local data")
     console.trace("🧹 STACK TRACE: Where clearUserData was called from:")
-    self.foodHistoryStore.clearAllScraps()
-    // Note: NOT clearing menuScrapStore to preserve scraped menus across sessions
     
-    // Selectively preserve scraped menus while clearing other user data
     try {
+      const { api } = require("../services/api")
       const storage = require("../utils/storage")
       
-      // Backup scraped menus before clearing storage
-      const currentState = await storage.load("root-v1")
-      let scraped_menus_backup = null
-      if (currentState?.menuScrapStore?.scrappedMenus) {
-        scraped_menus_backup = currentState.menuScrapStore.scrappedMenus
-        console.log(`💾 Backing up ${scraped_menus_backup.length} scraped menus before logout`)
+      // Step 1: Upload current user's scraps to AWS storage before logout
+      const currentScraps = self.menuScrapStore.scrappedMenus.slice() // Create copy
+      if (currentScraps.length > 0) {
+        console.log(`☁️ Uploading ${currentScraps.length} scrapped menus to AWS storage before logout`)
+        
+        // Convert scraps to format expected by backend
+        const scrapsToUpload = currentScraps.map(scrap => ({
+          id: scrap.id,
+          menu_name: scrap.menu_name,
+          place_name: scrap.place_name,
+          price: scrap.price,
+          category: scrap.category,
+          location: scrap.location,
+          rating: scrap.rating,
+          review_count: scrap.review_count,
+          image_url: scrap.image_url,
+          coordinates: scrap.coordinates,
+          scrapped_at: scrap.scrapped_at.toISOString(),
+        }))
+        
+        try {
+          const uploadResponse = await api.uploadUserScrapsToAWS(scrapsToUpload)
+          if (uploadResponse.ok) {
+            console.log(`✅ Successfully uploaded ${currentScraps.length} scraps to AWS storage`)
+          } else {
+            console.error("❌ Failed to upload scraps to AWS:", uploadResponse.problem)
+          }
+        } catch (uploadError) {
+          console.error("❌ Error uploading scraps to AWS:", uploadError)
+        }
+      } else {
+        console.log("ℹ️ No scraps to upload to AWS storage")
       }
       
-      // Clear the persisted state from AsyncStorage  
+      // Step 2: Clear all local user data (including scraps)
+      console.log("🧹 Clearing all local user data including scraped menus")
+      self.foodHistoryStore.clearAllScraps()
+      self.menuScrapStore.clearAllScraps() // Clear scraped menus to prevent cross-user contamination
+      
+      // Step 3: Clear persisted state from AsyncStorage
       await storage.remove("root-v1") // This key must match ROOT_STATE_STORAGE_KEY in setupRootStore.ts
       await storage.save("user-logged-out", "true") // Flag to prevent restoring stale data
       
-      // Restore scraped menus after clearing
-      if (scraped_menus_backup && scraped_menus_backup.length > 0) {
-        await storage.save("preserved-scraped-menus", scraped_menus_backup)
-        console.log(`💾 Preserved ${scraped_menus_backup.length} scraped menus in separate storage`)
-      }
-      
-      console.log("🧹 Cleared persisted state from AsyncStorage but preserved scraped menus")
+      console.log("✅ User data cleared successfully - scraps uploaded to AWS and local data wiped")
     } catch (error) {
-      console.warn("Failed to selectively clear persisted state:", error)
+      console.error("❌ Error in clearUserData:", error)
+      // Still try to clear local data even if AWS upload fails
+      self.foodHistoryStore.clearAllScraps()
+      self.menuScrapStore.clearAllScraps()
     }
   },
   
   async loadUserDataFromBackend() {
-    // Load user-specific data from backend when user logs in
-    console.log("🔄 loadUserDataFromBackend() called - starting data load process")
+    // NEW FLOW: Load user-specific scraps from AWS storage when user logs in
+    console.log("🔄 loadUserDataFromBackend() called - downloading user scraps from AWS storage")
     
     // Prevent multiple concurrent calls
     if (self._isLoading) {
@@ -58,67 +84,72 @@ export const RootStoreModel = types.model("RootStore").props({
     
     try {
       const { api } = require("../services/api")
+      const storage = require("../utils/storage")
       
-      // Load and merge backend data with existing scraped menus (don't clear)
-      console.log("🔄 Loading backend scraps and merging with existing local scraps")
+      // Step 1: Clear any existing local scraps (from previous user or stale data)
+      console.log("🧹 Clearing any existing local scraps before loading user-specific data")
+      self.foodHistoryStore.clearAllScraps()
+      self.menuScrapStore.clearAllScraps()
       
-      // Load scraps from backend
-      const scrapsResponse = await api.getScraps()
-      console.log("🔍 DEBUG: getScraps API response:", scrapsResponse)
-      if (scrapsResponse.ok && scrapsResponse.data) {
-        // Convert backend scraps to the format expected by both stores
-        const scraps = scrapsResponse.data
-        console.log("🔍 DEBUG: Scraps data from backend:", scraps)
-        console.log(`📊 Processing ${scraps.length} scraps from backend`)
+      // Step 2: Download user-specific scraps from AWS storage
+      console.log("☁️ Downloading user scraps from AWS storage")
+      try {
+        const scrapsResponse = await api.downloadUserScrapsFromAWS()
+        console.log("🔍 DEBUG: downloadUserScrapsFromAWS API response:", scrapsResponse)
         
-        let addedCount = 0
-        for (const scrap of scraps) {
-          if (scrap.restaurant) {
-            const restaurant = scrap.restaurant
-            console.log("🔍 DEBUG: Adding restaurant to stores:", restaurant.name, "ID:", restaurant.id)
+        if (scrapsResponse.ok && scrapsResponse.data) {
+          const scraps = scrapsResponse.data
+          console.log("🔍 DEBUG: User scraps data from AWS:", scraps)
+          console.log(`📊 Processing ${scraps.length} user-specific scraps from AWS`)
+          
+          let addedCount = 0
+          for (const scrap of scraps) {
+            console.log("🔍 DEBUG: Adding scrap to stores:", scrap.menu_name, "ID:", scrap.id)
             
-            // Add to FoodHistoryStore format (for legacy compatibility)
+            // Add to FoodHistoryStore format (for legacy compatibility) 
             self.foodHistoryStore.addScrappedItem({
-              id: restaurant.id,
-              name: restaurant.name,
+              id: scrap.id,
+              name: scrap.menu_name,
               distance: "0km", // Default distance
-              image: restaurant.image_url && restaurant.image_url.trim() ? restaurant.image_url : "", // Empty string for placeholder
+              image: scrap.image_url && scrap.image_url.trim() ? scrap.image_url : "",
               keywords: [], // Default keywords
-              category: "restaurant", // Default since backend doesn't have category
+              category: scrap.category || "restaurant",
               allergens: [], // Default allergens
             })
             
-            // Add to MenuScrapStore format (for menu-based scraps)
+            // Add to MenuScrapStore format (primary store for scraps)
             self.menuScrapStore.addScrappedMenu({
-              id: restaurant.id,
-              menu_name: restaurant.name, // Use restaurant name as menu name for now
-              place_name: restaurant.name,
-              price: 0, // Show ₩0 instead of null for consistent display
-              category: "restaurant", // Default since backend doesn't have category
-              location: restaurant.address && restaurant.address.trim() ? restaurant.address : "위치 정보 없음",
-              rating: 0, // Default rating since backend doesn't have rating
-              review_count: 0, // Backend scraps don't have review count
-              image_url: restaurant.image_url && restaurant.image_url.trim() ? restaurant.image_url : undefined,
-              coordinates: [parseFloat(restaurant.longitude) || 0, parseFloat(restaurant.latitude) || 0],
+              id: scrap.id,
+              menu_name: scrap.menu_name,
+              place_name: scrap.place_name,
+              price: scrap.price,
+              category: scrap.category || "restaurant",
+              location: scrap.location || "위치 정보 없음",
+              rating: scrap.rating || 0,
+              review_count: scrap.review_count || 0,
+              image_url: scrap.image_url,
+              coordinates: scrap.coordinates || [0, 0],
             })
             addedCount++
-          } else {
-            console.warn("⚠️ Scrap missing restaurant data:", scrap)
           }
+          console.log(`✅ Successfully loaded ${addedCount} user-specific scraps from AWS`)
+        } else {
+          console.log("ℹ️ No user scraps found in AWS storage (first time login or no scraps)")
         }
-        console.log(`✅ Successfully added ${addedCount} items to stores`)
+      } catch (awsError) {
+        console.error("❌ Error downloading scraps from AWS:", awsError)
+        // Continue without scraps if AWS download fails
       }
       
-      // Clear the logout flag since user has successfully logged in and loaded data
+      // Step 3: Clear the logout flag since user has successfully logged in
       try {
-        const storage = require("../utils/storage")
         await storage.remove("user-logged-out")
         console.log("✅ User data loaded successfully - cleared logout flag")
       } catch (error) {
         console.warn("Failed to clear logout flag:", error)
       }
     } catch (error) {
-      console.error("Failed to load user data from backend:", error)
+      console.error("❌ Failed to load user data from AWS:", error)
     } finally {
       self._isLoading = false
       console.log("🏁 loadUserDataFromBackend() completed")

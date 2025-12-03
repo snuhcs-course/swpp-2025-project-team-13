@@ -15,6 +15,7 @@ from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.db import IntegrityError, DataError, DatabaseError
+from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -39,6 +40,126 @@ from menu.models import Menu
 from restaurant.models import Restaurant
 
 logger = logging.getLogger(__name__)
+
+
+def _generate_menu_specific_reason(menu_data: Dict, user_prefs: Dict) -> str:
+    """Generate a personalized reason based on specific menu characteristics"""
+    menu_name = menu_data.get('name', '메뉴')
+    menu_category = menu_data.get('category', '')
+    restaurant_name = menu_data.get('restaurant_name', '식당')
+    keywords = menu_data.get('keywords', [])
+    price = menu_data.get('price', 0)
+    
+    reason_parts = []
+    
+    # 1. Menu name and restaurant-specific reason
+    reason_parts.append(f"'{menu_name}'은(는) {restaurant_name}의 대표 메뉴로")
+    
+    # 2. Category matching
+    preferred_categories = user_prefs.get('preferred_categories', [])
+    if menu_category and any(cat.lower() in menu_category.lower() for cat in preferred_categories):
+        reason_parts.append(f"좋아하시는 {menu_category} 카테고리에 속하며")
+    
+    # 3. Menu name-based taste analysis (since keywords aren't available)
+    menu_name_lower = menu_name.lower()
+    taste_prefs = user_prefs.get('taste_preferences', {})
+    taste_matches = []
+    
+    # Analyze menu name for taste indicators
+    if taste_prefs.get('spicy', 3) > 3 and any(spicy_word in menu_name for spicy_word in ['김치', '불', '매운', '고추', '칠리']):
+        taste_matches.append("매운맛 선호도")
+    if taste_prefs.get('sweet', 3) > 3 and any(sweet_word in menu_name for sweet_word in ['달콤', '단맛', '꿀', '당근', '고구마']):
+        taste_matches.append("단맛 선호도")
+    if taste_prefs.get('salty', 3) > 3 and any(salty_word in menu_name for salty_word in ['짠', '염장', '젓갈', '간장']):
+        taste_matches.append("짠맛 선호도")
+        
+    if taste_matches:
+        reason_parts.append(f"당신의 {', '.join(taste_matches)}와 잘 맞습니다")
+    else:
+        reason_parts.append("균형잡힌 맛으로 당신의 취향에 적합합니다")
+    
+    # 5. Price consideration
+    budget_range = user_prefs.get('budget_range', [0, 0])
+    if budget_range[0] > 0 and budget_range[1] > 0:
+        if budget_range[0] <= price <= budget_range[1]:
+            reason_parts.append(f"예산 범위({budget_range[0]:,}원~{budget_range[1]:,}원)에도 맞아")
+    
+    # Combine all reasons
+    final_reason = " ".join(reason_parts) + " 추천드립니다."
+    return final_reason
+
+
+def _generate_openai_reason(menu_data: Dict, user_prefs: Dict) -> str:
+    """Generate a personalized reason using OpenAI"""
+    try:
+        # Get the explanation generator
+        explanation_generator = get_explanation_generator()
+        if not explanation_generator:
+            # Fallback to manual reason if OpenAI is not available
+            return _generate_menu_specific_reason(menu_data, user_prefs)
+            
+        # Get reason calculator for features
+        reason_calculator = get_reason_calculator()
+        
+        # Calculate reason features based on menu and user data
+        reason_features = reason_calculator.calculate_features(
+            menu_data, 
+            user_prefs,
+            user_query_intent=None,  # Could be passed from Phase 1 if available
+            similarity_scores=None   # Could include similarity scores if available
+        )
+        
+        # Extract taste info from user preferences
+        taste_info = {
+            'spicy_level': user_prefs.get('taste_preferences', {}).get('spicy', 5),
+            'sweet_level': user_prefs.get('taste_preferences', {}).get('sweet', 5), 
+            'salty_level': user_prefs.get('taste_preferences', {}).get('salty', 5),
+            'favorite_cuisines': user_prefs.get('preferred_categories', [])
+        }
+        
+        # Generate explanation using OpenAI
+        explanation, top_reasons = explanation_generator.generate_explanation(
+            menu_name=menu_data.get('name', '메뉴'),
+            restaurant_name=menu_data.get('restaurant_name', '음식점'),
+            reason_features=reason_features,
+            user_query=None,  # Could be passed from Phase 1 if available
+            taste_info=taste_info
+        )
+        
+        logger.info(f"Generated OpenAI reason for {menu_data.get('name')}: {explanation}")
+        return explanation
+        
+    except Exception as e:
+        logger.warning(f"OpenAI reason generation failed for menu {menu_data.get('id')}: {e}")
+        # Fallback to template-based reason
+        return _generate_menu_specific_reason(menu_data, user_prefs)
+
+
+def _generate_generic_reason(user_prefs: Dict) -> str:
+    """Generate a generic reason based only on user preferences"""
+    preferred_categories = user_prefs.get('preferred_categories', [])
+    taste_prefs = user_prefs.get('taste_preferences', {})
+    
+    if preferred_categories:
+        base_reason = f"당신이 선호하는 {', '.join(preferred_categories[:2])} 종류의 음식과 잘 맞는 메뉴입니다."
+    else:
+        base_reason = "당신의 취향을 분석한 결과 추천된 메뉴입니다."
+    
+    # Add taste preferences
+    taste_reasons = []
+    if taste_prefs.get('spicy', 3) > 3:
+        taste_reasons.append("매운맛을 좋아하시는 취향")
+    if taste_prefs.get('sweet', 3) > 3:
+        taste_reasons.append("단맛을 좋아하시는 취향")
+    if taste_prefs.get('salty', 3) > 3:
+        taste_reasons.append("짠맛을 좋아하시는 취향")
+        
+    if taste_reasons:
+        base_reason += f" {', '.join(taste_reasons)}에 맞춰 선정되었습니다."
+    else:
+        base_reason += " 균형 잡힌 맛을 선호하시는 취향에 맞춰 선정되었습니다."
+        
+    return base_reason
 
 
 class RecommendationStreamResponse(StreamingHttpResponse):
@@ -467,8 +588,19 @@ def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_servi
 
 @require_http_methods(["POST"])
 @csrf_exempt
-def recommend_menu(request):
-    """메뉴 추천 API - Using StreamingHttpResponse with proper chunking for real-time delivery"""
+def recommend_menu_phase1(request):
+    """Phase 1: Get menu recommendations without reasons"""
+    return _recommend_menu_internal(request, phase=1)
+
+@require_http_methods(["POST"]) 
+@csrf_exempt
+def recommend_menu_phase2(request):
+    """Phase 2: Get recommendation reasons for specific menus"""
+    logger.info("🔥 Phase 2 endpoint called!")
+    return _recommend_menu_internal(request, phase=2)
+
+def _recommend_menu_internal(request, phase=None):
+    """Internal function to handle menu recommendations for different phases"""
     # Manually check authentication
     if not request.user.is_authenticated:
         return JsonResponse({
@@ -490,7 +622,144 @@ def recommend_menu(request):
         logger.info(f"=== 메뉴 추천 요청 시작 ===")
         logger.info(f"요청 데이터: {data}")
 
-        # 필수 필드 검증 (user_id 제거)
+        # EARLY PHASE CHECK: Handle Phase 2 immediately without running full pipeline
+        if phase == 2:
+            # Phase 2: LIGHTWEIGHT reason generation only - bypass all heavy logic
+            logger.info(f"🔥 Phase 2 Early Exit: 추천 이유만 생성 (전체 파이프라인 우회)")
+            menu_ids = data.get('menu_ids', [])
+            logger.info(f"Phase 2 요청된 메뉴 ID 개수: {len(menu_ids)}")
+            
+            if not menu_ids:
+                logger.warning("Phase 2 요청에 menu_ids가 없습니다")
+                return JsonResponse({
+                    'error': 'menu_ids required for phase 2'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get user preferences for reason generation (without running full pipeline)
+            try:
+                from users.models import User
+                user = request.user
+                user_preference = UserPreference.objects.get(user=user)
+                
+                # Lightweight onboarding_data for reason generation only
+                onboarding_data = {
+                    'taste_preferences': {
+                        'spicy': user_preference.spicy_level,
+                        'sweet': user_preference.sweet_level,
+                        'salty': user_preference.salty_level,
+                    },
+                    'preferred_categories': user_preference.favorite_cuisines,
+                }
+            except UserPreference.DoesNotExist:
+                # Fallback to basic preferences
+                onboarding_data = {
+                    'taste_preferences': {'spicy': 3.0, 'sweet': 3.0, 'salty': 3.0},
+                    'preferred_categories': [],
+                }
+            
+            # Phase 2: LIGHTWEIGHT menu data fetch for reason generation only
+            reason_updates = []
+            
+            try:
+                # Lightweight database connection for menu details only
+                recommender = RestaurantRecommender(verbose=False)
+                menu_data_map = {}
+                
+                # Convert string IDs to UUIDs
+                uuid_menu_ids = []
+                for menu_id in menu_ids:
+                    try:
+                        import uuid
+                        uuid_obj = uuid.UUID(menu_id)
+                        uuid_menu_ids.append(uuid_obj)
+                    except Exception as e:
+                        logger.warning(f"Invalid menu ID format: {menu_id}")
+                        continue
+                
+                if uuid_menu_ids:
+                    # LIGHTWEIGHT query: fetch only menu details for reason generation
+                    try:
+                        with recommender.conn.cursor() as cursor:
+                            # Simple query to get menu details - NO complex recommendation logic
+                            query = """
+                            SELECT m.id, m.name, m.description, m.price,
+                                   r.name as restaurant_name, r.category as restaurant_category
+                            FROM db_menus m
+                            JOIN db_restaurants r ON m.restaurant_id = r.id
+                            WHERE m.id = ANY(%s)
+                            """
+                            
+                            cursor.execute(query, (uuid_menu_ids,))
+                            menu_results = cursor.fetchall()
+                        
+                        for row in menu_results:
+                            menu_id_str = str(row[0])
+                                
+                            menu_data_map[menu_id_str] = {
+                                'id': row[0],
+                                'name': row[1],
+                                'description': row[2] or '',
+                                'price': row[3],
+                                'category': row[5] or '',  
+                                'restaurant_name': row[4],
+                                'restaurant_category': row[5] or '',
+                                'keywords': []  
+                            }
+                        
+                        logger.info(f"✅ Early Phase 2 - Lightweight fetch: got data for {len(menu_data_map)} menus")
+                        
+                    except Exception as db_error:
+                        logger.warning(f"Early Phase 2 - Lightweight database query failed: {db_error}")
+                        # Fallback to generic reasons if DB query fails
+                
+                # Generate ONLY personalized reasons based on menu data
+                for menu_id in menu_ids:
+                    try:
+                        menu_data = menu_data_map.get(menu_id)
+                        
+                        if menu_data:
+                            # Generate specific reason using OpenAI (lightweight)
+                            explanation = _generate_openai_reason(
+                                menu_data, onboarding_data
+                            )
+                        else:
+                            # Fallback to generic reason
+                            explanation = _generate_generic_reason(onboarding_data)
+                            
+                        reason_updates.append({
+                            'menu_id': menu_id,
+                            'reason': explanation
+                        })
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to generate reason for menu {menu_id}: {e}")
+                        reason_updates.append({
+                            'menu_id': menu_id, 
+                            'reason': '당신의 취향에 맞춰 추천된 메뉴입니다.'
+                        })
+                
+                try:
+                    recommender.close()
+                except:
+                    pass
+                        
+                logger.info(f"🎉 Early Phase 2 완료: {len(reason_updates)}개 이유 생성 (전체 추천 시스템 완전 우회)")
+                    
+            except Exception as e:
+                logger.error(f"Early Phase 2 error: {e}")
+                # Generate fallback generic reasons for all menu IDs
+                for menu_id in menu_ids:
+                    reason_updates.append({
+                        'menu_id': menu_id,
+                        'reason': '당신의 취향에 맞춰 추천된 메뉴입니다.'
+                    })
+                
+            return JsonResponse({
+                'success': True,
+                'reason_updates': reason_updates
+            })
+
+        # 필수 필드 검증 (user_id 제거) - Only for Phase 1 and streaming
         required_fields = ['user_location']
         for field in required_fields:
             if field not in data:
@@ -809,11 +1078,10 @@ def recommend_menu(request):
 
         logger.info(f"음식점 다양성 보장: {round_idx}라운드 진행, 최종 {len(final_results)}개 메뉴 선택")
 
-        # 결과를 스트리밍으로 반환 (두 단계: 1. 메뉴 정보 먼저, 2. 추천 이유는 나중에)
-        def stream_recommendations():
+        # Phase 1: Stream menu information without reasons
+        def stream_phase1_recommendations():
+            """Stream menu recommendations without reasons (Phase 1)"""
             import time
-            explanation_generator = get_explanation_generator()
-            reason_calculator = get_reason_calculator()
             result_count = 0
 
             # Get user preferences summary for contextualized messages
@@ -901,134 +1169,179 @@ def recommend_menu(request):
 
             logger.info(f"Phase 1 완료: {result_count}개 메뉴 정보 스트리밍")
 
-            # Send progress status: reason generation phase  
-            reason_progress_chunk = json.dumps({
-                'type': 'progress',
-                'message': "추천 이유를 추출하는 중입니다"
+            # Send Phase 1 completion signal - this will hide loading screen and show food images
+            phase1_complete_chunk = json.dumps({
+                'type': 'phase1_complete',
+                'message': f"Phase 1 완료: {result_count}개 메뉴 표시"
             }) + '\n'
-            yield reason_progress_chunk
+            yield phase1_complete_chunk
             sys.stdout.flush()
             sys.stderr.flush()
-            time.sleep(0.2)  # Brief delay to show progress
+            time.sleep(0.1)  # Brief pause before starting Phase 2
 
-            # Phase 2: 추천 이유 생성 및 스트리밍 (각 메뉴별로 개별 생성)
-            for idx, (menu, score, components) in enumerate(final_results):
-                menu_id = str(menu.get('id'))  # Convert UUID to string for JSON serialization
-                try:
-                    # Calculate reason features
-                    reason_features = reason_calculator.calculate_features(
-                        menu=menu,
-                        user_preferences=enhanced_onboarding_data,
-                        user_query_intent=context_info.get('intent').__dict__ if context_info.get('intent') else None,
-                        similarity_scores={'text_similarity': components.text_similarity if components else 0.0}
-                    )
+        # Phase 2: Stream recommendation reasons (currently commented out)
+        def stream_phase2_reasons():
+            """Stream recommendation reasons using OpenAI (Phase 2) - DISABLED"""
+            import time
+            reason_calculator = get_reason_calculator()
 
-                    # Generate GPT explanation
-                    explanation = f"추천 이유를 생성하는 중..."  # 기본값
-                    reason_keys = []
-                    
-                    if explanation_generator:
-                        gpt_explanation, reason_keys = explanation_generator.generate_explanation(
-                            menu_name=menu.get('name', ''),
-                            restaurant_name=menu.get('restaurant_name', ''),
-                            reason_features=reason_features,
-                            user_query=query_text,
-                            taste_info={
-                                'spicy_level': enhanced_onboarding_data.get('taste_preferences', {}).get('spicy', 3),
-                                'sweet_level': enhanced_onboarding_data.get('taste_preferences', {}).get('sweet', 3),
-                                'salty_level': enhanced_onboarding_data.get('taste_preferences', {}).get('salty', 3),
-                                'favorite_cuisines': enhanced_onboarding_data.get('preferred_categories', [])
-                            }
-                        )
-                        explanation = gpt_explanation
-                        logger.info(f"Generated explanation for {menu.get('name', '')}")
-                        logger.info(f"Explanation: {explanation}")
+            # # Phase 2: 추천 이유 생성 및 스트리밍 (각 메뉴별로 개별 생성)
+            # logger.info("Phase 2 시작: 추천 이유 생성")
+            # 
+            # # Re-enable explanation generator for Phase 2
+            # explanation_generator = get_explanation_generator()
+            # 
+            # for idx, (menu, score, components) in enumerate(final_results):
+            #     menu_id = str(menu.get('id'))  # Convert UUID to string for JSON serialization
+            #     try:
+            #         # Calculate reason features
+            #         reason_features = reason_calculator.calculate_features(
+            #             menu=menu,
+            #             user_preferences=enhanced_onboarding_data,
+            #             user_query_intent=context_info.get('intent').__dict__ if context_info.get('intent') else None,
+            #             similarity_scores={'text_similarity': components.text_similarity if components else 0.0}
+            #         )
+            # 
+            #         # Phase 2: Generate actual explanations using OpenAI
+            #         explanation = ""
+            #         reason_keys = []
+            #         
+            #         if explanation_generator:
+            #             gpt_explanation, reason_keys = explanation_generator.generate_explanation(
+            #                 menu_name=menu.get('name', ''),
+            #                 restaurant_name=menu.get('restaurant_name', ''),
+            #                 reason_features=reason_features,
+            #                 user_query=query_text,
+            #                 taste_info={
+            #                     'spicy_level': enhanced_onboarding_data.get('taste_preferences', {}).get('spicy', 3),
+            #                     'sweet_level': enhanced_onboarding_data.get('taste_preferences', {}).get('sweet', 3),
+            #                     'salty_level': enhanced_onboarding_data.get('taste_preferences', {}).get('salty', 3),
+            #                     'favorite_cuisines': enhanced_onboarding_data.get('preferred_categories', [])
+            #                 }
+            #             )
+            #             explanation = gpt_explanation
+            #             logger.info(f"Generated explanation for {menu.get('name', '')}")
+            #             logger.info(f"Explanation: {explanation}")
+            # 
+            #         # Store reason features in database with generated explanation
+            #         try:
+            #             external_menu_uuid = menu.get('id')
+            #             external_restaurant_uuid = menu.get('restaurant_id')
+            # 
+            #             if external_menu_uuid and external_restaurant_uuid:
+            #                 menu_obj, _ = get_or_create_menu_with_mapping(external_menu_uuid, menu)
+            #                 restaurant_obj, _ = get_or_create_restaurant_with_mapping(external_restaurant_uuid, menu)
+            # 
+            #                 if menu_obj and restaurant_obj:
+            #                     MenuReasonFeatures.objects.update_or_create(
+            #                         user=request.user,
+            #                         menu=menu_obj,
+            #                         restaurant=restaurant_obj,
+            #                         defaults={
+            #                             'semantic_similarity': reason_features.get('semantic_similarity', 0.0),
+            #                             'image_similarity': reason_features.get('image_similarity', 0.0),
+            #                             'category_match_score': reason_features.get('category_match_score', 0.0),
+            #                             'taste_alignment': reason_features.get('taste_alignment', 0.0),
+            #                             'query_alignment': reason_features.get('query_alignment', 0.0),
+            #                             'temporal_fit_score': reason_features.get('temporal_fit_score', 0.0),
+            #                             'distance_score': reason_features.get('distance_score', 0.0),
+            #                             'popularity_score': reason_features.get('popularity_score', 0.0),
+            #                             'allergy_penalty': components.allergy_penalty if components else 0.0,
+            #                             'dislike_penalty': components.dislike_penalty if components else 0.0,
+            #                             'explanation': explanation,
+            #                             'explanation_reason_keys': reason_keys,
+            #                             'final_score': score,
+            #                             'query_context': query_text
+            #                         }
+            #                     )
+            #                     logger.info(f"Stored reason features for menu={external_menu_uuid}, restaurant={external_restaurant_uuid}")
+            #         except Exception as e:
+            #             logger.warning(f"Error storing reason features: {e}")
+            # 
+            #         # Stream the generated reason immediately to frontend
+            #         logger.info(f"📤 Streaming reason {idx+1}/{len(final_results)} for menu {menu_id}: {explanation[:50]}...")
+            #         chunk = json.dumps({
+            #             'type': 'reason_update',
+            #             'menu_id': menu_id,
+            #             'reason': explanation
+            #         }) + '\n'
+            #         
+            #         # Force immediate flushing to ensure real-time streaming
+            #         yield chunk
+            #         
+            #         # Force system flush to ensure data is sent immediately
+            #         import sys
+            #         sys.stdout.flush()
+            #         sys.stderr.flush()
+            #         
+            #         # Small delay to ensure chunk boundary recognition
+            #         time.sleep(0.1)
+            # 
+            #     except Exception as e:
+            #         logger.warning(f"Failed to generate explanation for {menu.get('name', '')}: {e}")
+            #         # Stream error indication for this menu
+            #         yield json.dumps({
+            #             'type': 'reason_update',
+            #             'menu_id': menu_id,
+            #             'reason': '추천 이유 생성 실패'
+            #         }) + '\n'
 
-                    # Store reason features in database
-                    try:
-                        external_menu_uuid = menu.get('id')
-                        external_restaurant_uuid = menu.get('restaurant_id')
-
-                        if external_menu_uuid and external_restaurant_uuid:
-                            menu_obj, _ = get_or_create_menu_with_mapping(external_menu_uuid, menu)
-                            restaurant_obj, _ = get_or_create_restaurant_with_mapping(external_restaurant_uuid, menu)
-
-                            if menu_obj and restaurant_obj:
-                                MenuReasonFeatures.objects.update_or_create(
-                                    user=request.user,
-                                    menu=menu_obj,
-                                    restaurant=restaurant_obj,
-                                    defaults={
-                                        'semantic_similarity': reason_features.get('semantic_similarity', 0.0),
-                                        'image_similarity': reason_features.get('image_similarity', 0.0),
-                                        'category_match_score': reason_features.get('category_match_score', 0.0),
-                                        'taste_alignment': reason_features.get('taste_alignment', 0.0),
-                                        'query_alignment': reason_features.get('query_alignment', 0.0),
-                                        'temporal_fit_score': reason_features.get('temporal_fit_score', 0.0),
-                                        'distance_score': reason_features.get('distance_score', 0.0),
-                                        'popularity_score': reason_features.get('popularity_score', 0.0),
-                                        'allergy_penalty': components.allergy_penalty if components else 0.0,
-                                        'dislike_penalty': components.dislike_penalty if components else 0.0,
-                                        'explanation': explanation,
-                                        'explanation_reason_keys': reason_keys,
-                                        'final_score': score,
-                                        'query_context': query_text
-                                    }
-                                )
-                                logger.info(f"Stored reason features for menu={external_menu_uuid}, restaurant={external_restaurant_uuid}")
-                    except Exception as e:
-                        logger.warning(f"Error storing reason features: {e}")
-
-                    # IMMEDIATELY stream the reason update for this specific menu
-                    logger.info(f"📤 Streaming reason {idx+1}/{len(final_results)} for menu {menu_id}: {explanation[:50]}...")
-                    chunk = json.dumps({
-                        'type': 'reason_update',
-                        'menu_id': menu_id,
-                        'reason': explanation
-                    }) + '\n'
-                    
-                    # Force immediate flushing to ensure real-time streaming
-                    yield chunk
-                    
-                    # Force system flush to ensure data is sent immediately
-                    import sys
-                    sys.stdout.flush()
-                    sys.stderr.flush()
-                    
-                    # Small delay to ensure chunk boundary recognition
-                    time.sleep(0.05)
-
-                except Exception as e:
-                    logger.warning(f"Failed to generate explanation for {menu.get('name', '')}: {e}")
-                    # Stream error indication for this menu
-                    yield json.dumps({
-                        'type': 'reason_update',
-                        'menu_id': menu_id,
-                        'reason': '추천 이유 생성 실패'
-                    }) + '\n'
-
+        # Combined streaming function that orchestrates both phases
+        def stream_recommendations():
+            """Main streaming function that combines Phase 1 and Phase 2"""
+            # Phase 1: Stream menu information immediately
+            yield from stream_phase1_recommendations()
+            
+            # Phase 2: Stream reasons (currently disabled)
+            # yield from stream_phase2_reasons()
+            
             # Close recommender
             try:
                 recommender.close()
             except:
                 pass
 
-            logger.info(f"=== 메뉴 추천 완료: Phase 1({result_count}개 메뉴), Phase 2(추천 이유) 스트리밍 ===")
+            logger.info(f"=== 메뉴 추천 완료: Phase 1 only (Phase 2 disabled) ===")
 
-        # Return streaming response with proper headers for real-time delivery
-        response = RecommendationStreamResponse(
-            stream_recommendations(),
-            content_type='application/x-ndjson; charset=utf-8'
-        )
-        # Disable caching and buffering for streaming
-        response['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
-        response['Pragma'] = 'no-cache'
-        response['Expires'] = '0'
-        response['X-Accel-Buffering'] = 'no'  # Nginx: disable buffering
-        # Remove Content-Length to enable streaming
-        if 'Content-Length' in response:
-            del response['Content-Length']
-        return response
+        # Handle different phases
+        if phase == 1:
+            # Phase 1: Return only menu data without reasons
+            formatted_results = []
+            for menu, score, components in final_results:
+                formatted_item = format_menu_item(menu, score, components, None, enhanced_onboarding_data)
+                formatted_results.append(formatted_item)
+            
+            # Close recommender
+            try:
+                recommender.close()
+            except:
+                pass
+                
+            return JsonResponse({
+                'success': True,
+                'query_type': 'menu',
+                'total_results': len(formatted_results),
+                'results': formatted_results
+            })
+            
+        # Note: Phase 2 is now handled at the beginning of this function for early exit
+        
+        else:
+            # Original streaming behavior (phase=None)
+            # Return streaming response with proper headers for real-time delivery
+            response = RecommendationStreamResponse(
+                stream_recommendations(),
+                content_type='application/x-ndjson; charset=utf-8'
+            )
+            # Disable caching and buffering for streaming
+            response['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
+            response['X-Accel-Buffering'] = 'no'  # Nginx: disable buffering
+            # Remove Content-Length to enable streaming
+            if 'Content-Length' in response:
+                del response['Content-Length']
+            return response
         
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in request: {e}")
@@ -1041,6 +1354,12 @@ def recommend_menu(request):
             'error': '서버 내부 오류',
             'detail': str(e) if __import__('django').conf.settings.DEBUG else None
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@require_http_methods(["POST"])
+@csrf_exempt  
+def recommend_menu(request):
+    """Original streaming menu recommendation API"""
+    return _recommend_menu_internal(request, phase=None)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
