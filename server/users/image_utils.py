@@ -9,6 +9,7 @@ from io import BytesIO
 from .foodlist_matcher import FoodListMatcher
 
 logger = logging.getLogger(__name__)
+import numpy as np
 
 # =====================
 # Setup
@@ -32,7 +33,6 @@ if ENABLE_CLIP_LABELING:
         ENABLE_CLIP_LABELING = False
 else:
     logger.info("CLIP labeling is disabled")
-
 
 def _extract_s3_key(url: str) -> str:
     parsed = urlparse(url)
@@ -97,6 +97,43 @@ def get_food_image_category(url: str) -> tuple[str, float]:
     food_categories = _get_food_categories()
     return _predict_category_from_bytes(image_bytes, food_categories)
 
+def get_clip_embedding_from_bytes(image_bytes: bytes) -> list[float]:
+    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    inputs = processor(images=[image], return_tensors="pt").to(device)
+    with torch.no_grad():
+        feats = model.get_image_features(**inputs)  # [1, D]
+    vec = feats[0].cpu().numpy().astype(np.float32)
+    vec = vec / (np.linalg.norm(vec) + 1e-12)      # cosine용 정규화
+    return vec.tolist()
+
+def normalize_to_onboarding_category(label: str) -> tuple[str, str]:
+    """주어진 한글 카테고리/키워드를 온보딩 카테고리(id, label)로 매핑.
+    매칭 실패 시 ('other', '기타') 반환.
+    """
+    if not label:
+        return ("other", "기타")
+    t = str(label).lower()
+    rules = [
+        (['한식','korean'], ('korean','한식')),
+        (['일식','japanese','초밥','스시','라멘'], ('japanese','일식')),
+        (['중식','chinese','짜장','짬뽕','마라'], ('chinese','중식')),
+        (['이탈','파스타','피자','italian'], ('italian','이탈리안')),
+        (['멕시','taco','burrito','mexican'], ('mexican','멕시칸')),
+        (['인도','커리','난','indian'], ('indian','인도')),
+        (['아메리칸','미국','버거','치킨','american'], ('american','아메리칸')),
+        (['태국','thai','팟타이'], ('thai','태국')),
+        (['지중해','그리스','mediterranean'], ('mediterranean','지중해')),
+        (['프렌치','프랑스','french'], ('french','프렌치')),
+        (['베트남','쌀국수','banh','vietnam'], ('vietnamese','베트남')),
+        (['스페인','타파스','paella','spanish'], ('spanish','스페인')),
+    ]
+    for keywords, result in rules:
+        if any(k in t for k in keywords):
+            return result
+    # 베이커리/디저트/카페 등은 임시로 아메리칸으로 묶음
+    if any(k in t for k in ['베이커리','디저트','카페','bakery','dessert','cafe']):
+        return ('american','아메리칸')
+    return ("other", "기타")
 
 def get_food_image_with_alternatives_from_bytes(image_bytes: bytes) -> dict:
     """

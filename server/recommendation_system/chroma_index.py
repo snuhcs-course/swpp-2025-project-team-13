@@ -9,6 +9,8 @@ import logging
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import os
+import math
+from collections import Counter
 
 import numpy as np
 
@@ -361,6 +363,57 @@ class ChromaVectorIndexBuilder:
             self.logger.error(f"가게 검색 실패: {e}")
             return []
     
+    # 사용자 갤러리 이미지 임베딩을 저장/검색하는 전용 컬렉션을 반환
+    def get_user_images_collection(self):
+        self._initialize_chroma()
+        return self.client.get_or_create_collection(
+            name="user_images",
+            metadata={"hnsw:space": "cosine"},
+        )
+    # user_images 컬렉션에 단일 이미지 임베딩을 upsert(insert or update)
+    def add_user_image_embedding(self, *, user_id: int, image_id: str, embedding: list[float], image_url: str, category: str | None = None):
+        col = self.get_user_images_collection()
+        meta = {"user_id": user_id, "image_url": image_url}
+        if category:
+            meta["category"] = category
+        col.upsert(
+            ids=[f"userimg:{image_id}"],
+            embeddings=[embedding],
+            metadatas=[meta],
+            documents=[image_url],   # 선택
+        )        
+
+    def get_user_category_exploration_preference(self, user_id: int, min_images: int = 10) -> Optional[float]:
+        """유저의 갤러리 카테고리 분포로 탐험성 점수(0~5) 계산.
+
+        - 이미지가 충분치 않으면 None 반환(기존 온보딩/DB 값을 사용하도록).
+        - 계산식: 카테고리 분포의 엔트로피를 정규화(0~1) 후 0~5 스케일로 매핑.
+        """
+        if not CHROMADB_AVAILABLE or not self.client:
+            return None
+
+        try:
+            col = self.get_user_images_collection()
+            res = col.get(where={"user_id": user_id}, include=["metadatas"])
+            metas = (res or {}).get("metadatas") or []
+            cats = [m.get("category") for m in metas if m and m.get("category")]
+            if len(cats) < min_images:
+                return None
+
+            cnt = Counter(cats)
+            total = sum(cnt.values())
+            if total == 0:
+                return None
+            ps = [c / total for c in cnt.values()]
+            H = -sum(p * math.log(p + 1e-12) for p in ps)
+            Hmax = math.log(len(ps)) if ps else 0.0
+            Hnorm = 0.0 if Hmax == 0.0 else H / Hmax  # 0~1
+            return round(5.0 * Hnorm, 2)
+        except Exception as e:
+            self.logger.error(f"탐험성 계산 실패: {e}")
+            return None
+
+
     def get_collection_info(self) -> Dict[str, Any]:
         """컬렉션 정보 조회"""
         if not CHROMADB_AVAILABLE or not self.client:

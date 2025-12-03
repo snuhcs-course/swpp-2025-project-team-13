@@ -6,8 +6,9 @@
 
 import json
 import logging
+import math
 import random
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Tuple, Any, Generator
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
@@ -33,11 +34,11 @@ from .unified_embeddings import (
 from .rl_scoring import get_rl_scorer, ScoringWeights
 from .scoring_strategy import ScoringContext, HybridScoringStrategy
 # ChromaDB 관련 import (더 이상 사용 안함 - client.py로 대체)
-# from . import EmbeddingService, VectorIndexBuilder, RecommendationEngine
-from users.models import UserPreference
+from users.models import UserPreference, UserGalleryImage, UserScrap
 from recommendation.models import MenuReasonFeatures, MenuExternalMapping, RestaurantExternalMapping
 from menu.models import Menu
 from restaurant.models import Restaurant
+from psql_data.models import DbRestaurant
 
 logger = logging.getLogger(__name__)
 
@@ -168,15 +169,11 @@ class RecommendationStreamResponse(StreamingHttpResponse):
     separators to help WSGI servers recognize chunk boundaries and stream properly.
     """
     def __iter__(self):
-        import sys
         for chunk in self.streaming_content:
             if isinstance(chunk, str):
                 chunk = chunk.encode(self.charset or 'utf-8')
             # Yield the chunk as-is; WSGI will handle transmission
             yield chunk
-            # Force immediate flushing to ensure real-time streaming
-            sys.stdout.flush()
-            sys.stderr.flush()
 
 
 # Request deduplication cache: tracks recent recommendation requests
@@ -351,8 +348,6 @@ def format_menu_item(
     # Convert UUID objects to strings for JSON serialization
     menu_id = menu.get('id')
     restaurant_id = menu.get('restaurant_id')
-    
-    # Restaurant ID is now properly handled as UUID string
 
     return {
         'id': str(menu_id) if menu_id else None,
@@ -585,6 +580,85 @@ def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_servi
 #         """가게 추천 검색 - DEPRECATED"""
 #         # ... (주석 처리됨)
 # ===== 구버전 API 끝 =====
+
+def calculate_gallery_exploration_preference(user_id: int, min_images: int = 10) -> Optional[float]:
+    """
+    사용자 갤러리 이미지 카테고리 분포로 탐험성 점수(0~5) 계산
+    """
+    try:
+        categories = list(
+            UserGalleryImage.objects.filter(user_id=user_id)
+            .exclude(category_tag__isnull=True)
+            .exclude(category_tag__exact='')
+            .values_list('category_tag', flat=True)
+        )
+    except Exception as exc:
+        logger.warning(f"갤러리 탐험성 계산 실패(user_id={user_id}): {exc}")
+        return None
+
+    if len(categories) < min_images:
+        return None
+
+    counts = Counter(categories)
+    total = sum(counts.values())
+    distinct = len(counts)
+
+    if total == 0 or distinct == 0:
+        return None
+
+    probabilities = [count / total for count in counts.values()]
+    entropy = -sum(p * math.log(p + 1e-12) for p in probabilities)
+    max_entropy = math.log(distinct)
+
+    if max_entropy <= 0:
+        return None
+
+    exploration_score = round(5.0 * (entropy / max_entropy), 2)
+    return exploration_score
+
+
+def derive_preferred_categories_from_scraps(user_id: int, top_k: int = 3, min_count: int = 1) -> List[str]:
+    """
+    사용자의 스크랩한 음식점들을 PSQL 레스토랑(external_id 매핑)로 연결해
+    category_normalized 상위 빈도 카테고리를 반환한다.
+    """
+    try:
+        # UserScrap → Restaurant.source(external_id로 가정)
+        sources = list(
+            UserScrap.objects.filter(user_id=user_id)
+            .select_related('restaurant')
+            .values_list('restaurant__source', flat=True)
+        )
+    except Exception as exc:
+        logger.warning(f"스크랩 카테고리 추출 실패(user_id={user_id}): {exc}")
+        return []
+    
+    if not sources:
+        return []
+    
+    try:
+        categories = list(
+            DbRestaurant.objects.filter(external_id__in=sources)
+            .exclude(category_normalized__isnull=True)
+            .exclude(category_normalized__exact='')
+            .values_list('category_normalized', flat=True)
+        )
+    except Exception as exc:
+        logger.warning(f"스크랩-PSQL 카테고리 매핑 실패(user_id={user_id}): {exc}")
+        return []
+    
+    if not categories:
+        return []
+    
+    counts = Counter(categories)
+    # 최소 등장 횟수 필터 및 상위 k 추출
+    filtered = [(cat, cnt) for cat, cnt in counts.items() if cnt >= min_count]
+    filtered.sort(key=lambda x: x[1], reverse=True)
+    top_categories = [cat for cat, _ in filtered[:top_k]]
+    
+    if top_categories:
+        logger.info(f"스크랩 기반 선호 카테고리(user_id={user_id}): {top_categories}")
+    return top_categories
 
 @require_http_methods(["POST"])
 @csrf_exempt
@@ -824,7 +898,24 @@ def _recommend_menu_internal(request, phase=None):
                 'budget_range': data.get('budget_range', [0, 0]),
                 'distance_preference': data.get('distance_preference', 2.0)
             }
+        # 갤러리 카테고리 다양성 기반 exploration_preference 보정 (Chroma 미사용, ORM 기반)
+        ep_from_gallery = calculate_gallery_exploration_preference(request.user.id, min_images=10)
+        if ep_from_gallery is not None:
+            exploration_preference = ep_from_gallery
+            logger.info(f"갤러리 기반 exploration_preference 적용: {exploration_preference}")
         
+        # 스크랩 기반 상위 카테고리를 선호 카테고리에 병합 (기존 로직 보존 + 보강)
+        try:
+            scrap_pref_cats = derive_preferred_categories_from_scraps(request.user.id, top_k=3, min_count=1)
+            if scrap_pref_cats:
+                existing = onboarding_data.get('preferred_categories', []) or []
+                # 기존 + 스크랩 카테고리 유니크 병합 (순서 유지)
+                merged = list(dict.fromkeys([*existing, *scrap_pref_cats]))
+                onboarding_data['preferred_categories'] = merged
+                logger.info(f"스크랩 기반 선호 카테고리 병합: {merged}")
+        except Exception as exc:
+            logger.warning(f"스크랩 기반 선호 카테고리 병합 실패: {exc}")
+
         gallery_analysis = data.get('gallery_analysis')
         behavior_data = data.get('behavior_data')
 
@@ -892,7 +983,6 @@ def _recommend_menu_internal(request, phase=None):
             
             # PostGIS 공간 쿼리로 근처 레스토랑 검색
             logger.info(f"근처 레스토랑 검색 중... (위치: {client_profile.location}, 반경: {search_context.max_distance}km)")
-            
             restaurants = recommender.find_nearby_restaurants(
                 client_profile,
                 max_distance_km=search_context.max_distance,
@@ -1084,90 +1174,27 @@ def _recommend_menu_internal(request, phase=None):
             import time
             result_count = 0
 
-            # Get user preferences summary for contextualized messages
-            user_prefs_summary = []
-            if enhanced_onboarding_data:
-                cuisines = enhanced_onboarding_data.get('preferred_categories', [])
-                if cuisines:
-                    user_prefs_summary.append(f"선호 요리: {', '.join(cuisines[:2])}")
-                
-                taste_prefs = enhanced_onboarding_data.get('taste_preferences', {})
-                if taste_prefs:
-                    taste_desc = []
-                    if taste_prefs.get('spicy', 3) > 3: taste_desc.append("매운맛")
-                    if taste_prefs.get('sweet', 3) > 3: taste_desc.append("단맛") 
-                    if taste_prefs.get('salty', 3) > 3: taste_desc.append("짠맛")
-                    if taste_desc:
-                        user_prefs_summary.append(f"선호 맛: {', '.join(taste_desc)}")
-            
-            prefs_text = " / ".join(user_prefs_summary[:2]) if user_prefs_summary else "당신의 취향"
-
-            # Send initial progress status: analyzing preferences
-            initial_progress_chunk = json.dumps({
-                'type': 'progress',
-                'message': f"{prefs_text}을 분석 중입니다"
-            }) + '\n'
-            yield initial_progress_chunk
-            import sys
-            sys.stdout.flush()
-            sys.stderr.flush()
-            time.sleep(0.3)
-
-            # Send second progress status: finding restaurants
-            restaurant_progress_chunk = json.dumps({
-                'type': 'progress',
-                'message': "식당을 탐색하는 중입니다"
-            }) + '\n'
-            yield restaurant_progress_chunk
-            sys.stdout.flush()
-            sys.stderr.flush()
-            time.sleep(0.3)
-
             # 첫 메타데이터 스트림
-            metadata_chunk = json.dumps({
+            yield json.dumps({
                 'type': 'metadata',
                 'success': True,
                 'query_type': 'menu',
                 'total_results': len(final_results)
             }) + '\n'
-            
-            # Force immediate delivery of metadata
-            yield metadata_chunk
-            sys.stdout.flush()
-            sys.stderr.flush()
-            
             logger.debug(f"Streaming metadata: {len(final_results)} results")
 
-            # Send progress status: menu selection phase
-            progress_chunk = json.dumps({
-                'type': 'progress',
-                'message': f"{prefs_text} 기준에 맞춰 메뉴를 선정하는 중입니다"
-            }) + '\n'
-            yield progress_chunk
-            sys.stdout.flush()
-            sys.stderr.flush()
-            time.sleep(0.2)  # Brief delay to show progress
-
-            # Phase 1: 즉시 메뉴 정보 스트리밍 (추천 이유 없이)
             for menu, score, components in final_results:
-                # 기본 정보만으로 메뉴 아이템 포맷 (추천 이유 없음)
-                formatted_item = format_menu_item(menu, score, components, None, enhanced_onboarding_data)
-                chunk = json.dumps({
-                    'type': 'result',
-                    'item': formatted_item
-                }) + '\n'
-                
-                # Force immediate streaming for each menu item
-                yield chunk
-                
-                # Force system flush to ensure immediate delivery
-                import sys
-                sys.stdout.flush()
-                sys.stderr.flush()
-                
-                result_count += 1
+                # Generate explanation using GPT
+                category = menu.get('category', '')
+                rating_raw = menu.get('rating')
+                rating = float(rating_raw) if rating_raw is not None else 0.0
 
-            logger.info(f"Phase 1 완료: {result_count}개 메뉴 정보 스트리밍")
+                review_count_raw = menu.get('review_count')
+                review_count = int(review_count_raw) if review_count_raw is not None else 0
+
+                explanation = f"'{category}' 카테고리, 평점 {rating:.1f} (리뷰 {review_count:,}건)" if review_count > 0 else f"'{category}' 카테고리"
+                reason_features = {}
+                reason_keys = []
 
             # Send Phase 1 completion signal - this will hide loading screen and show food images
             phase1_complete_chunk = json.dumps({

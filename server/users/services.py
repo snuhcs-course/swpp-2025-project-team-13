@@ -8,7 +8,6 @@ from .models import User, Profile, Follow, UserGalleryImage
 
 logger = logging.getLogger(__name__)
 
-
 @transaction.atomic
 def create_user_with_profile(*, username: str, email: str, password: str, bio: str = "", preferences: dict | None = None) -> User:
     user = User.objects.create_user(username=username, email=email, password=password)
@@ -74,25 +73,7 @@ def upload_user_photo(*, user: User, photo_url: str, local_uri: str, image_bytes
     Returns:
         UserGalleryImage instance with AI-inferred label and alternatives
     """
-    from django.db import transaction, IntegrityError
-    
-    try:
-        with transaction.atomic():
-            photo = UserGalleryImage.objects.create(user=user, image_url=photo_url, local_uri=local_uri)
-    except IntegrityError:
-        # Handle race condition - try to find existing photo with same URL/URI
-        try:
-            photo = UserGalleryImage.objects.filter(
-                user=user,
-                image_url=photo_url,
-                local_uri=local_uri
-            ).first()
-            if not photo:
-                # If no existing photo found, re-raise the original error
-                raise
-        except Exception:
-            # If still fails, re-raise the original error
-            raise
+    photo = UserGalleryImage.objects.create(user=user, image_url=photo_url, local_uri=local_uri)
 
     # Only attempt CLIP labeling if image bytes are provided
     # This avoids S3 AccessDenied errors and allows graceful degradation
