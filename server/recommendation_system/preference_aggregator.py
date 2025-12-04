@@ -1,11 +1,14 @@
 """
+
 User Preference Aggregation System
 
 Aggregates user preferences from multiple sources:
+
 - Taste preferences (spicy, sweet, salty, oily, chewy)
 - Allergies and disliked ingredients
 - Favorite cuisines
 - Recent food images (inferred food types)
+- Scrap-based category preferences (NEW)
 """
 
 from typing import Dict, List, Any
@@ -79,8 +82,14 @@ class UserPreferenceAggregator:
         # 4. Inferred food interests from gallery images
         food_interests = self._get_food_interests()
 
-        # 5. Calculate confidence scores
-        confidence = self._calculate_confidence(taste_prefs, allergies, dislikes, food_interests)
+        # 5. Scrap-based category preferences (NEW)
+        scrap_category_prefs = self._get_scrap_category_preferences()
+
+        # 6. Merge cuisines with scrap-based preferences
+        merged_cuisines = self._merge_cuisine_preferences(cuisines, scrap_category_prefs)
+
+        # 7. Calculate confidence scores
+        confidence = self._calculate_confidence(taste_prefs, allergies, dislikes, food_interests, scrap_category_prefs)
 
         return {
             'user_id': self.user.id,
@@ -88,8 +97,9 @@ class UserPreferenceAggregator:
             'taste_preferences': taste_prefs,
             'allergies': allergies,
             'disliked_ingredients': dislikes,
-            'favorite_cuisines': cuisines,
+            'favorite_cuisines': merged_cuisines,
             'inferred_food_interests': food_interests,
+            'scrap_category_preferences': scrap_category_prefs,  # NEW
             'exploration_preference': self.preference.exploration_preference,
             'confidence': confidence,
             'total_gallery_images': self._get_total_gallery_images(),
@@ -151,8 +161,60 @@ class UserPreferenceAggregator:
 
         return result
 
+    def _get_scrap_category_preferences(self) -> Dict[str, Any]:
+        """
+        Get category preferences based on user's scrapped restaurants
+
+        Returns:
+            {
+                'category_counts': {'중식': 5, '한식': 3},
+                'category_preferences': {'중식': 0.625, '한식': 0.375},
+                'top_categories': ['중식', '한식'],
+                'total_scraps': 8
+            }
+        """
+        try:
+            from users.scrap_category_service import ScrapCategoryPreferenceService
+            service = ScrapCategoryPreferenceService(self.user)
+            return service.get_category_preference_profile()
+        except Exception as e:
+            logger.warning(f"Error getting scrap category preferences: {e}")
+            return {
+                'category_counts': {},
+                'category_preferences': {},
+                'top_categories': [],
+                'total_scraps': 0
+            }
+
+    def _merge_cuisine_preferences(self, explicit_cuisines: List[str],
+                                   scrap_prefs: Dict[str, Any]) -> List[str]:
+        """
+        Merge explicit cuisine preferences with scrap-based preferences
+
+        Priority: Explicit > Scrap-based
+        """
+        explicit_set = set(explicit_cuisines or [])
+        scrap_top = set(scrap_prefs.get('top_categories', []))
+
+        # Merge with explicit cuisines taking priority
+        merged = list(explicit_set | scrap_top)
+
+        # Sort by preference score (scrap-based scores for those available)
+        scrap_scores = scrap_prefs.get('category_preferences', {})
+
+        def sort_key(cuisine):
+            # Explicit cuisines get score 2.0, scrap-based get their score
+            if cuisine in explicit_set and cuisine not in scrap_top:
+                return 2.0
+            return scrap_scores.get(cuisine, 0.5)
+
+        merged.sort(key=sort_key, reverse=True)
+
+        return merged[:10]  # Limit to top 10
+
     def _calculate_confidence(self, taste_prefs: Dict, allergies: List,
-                              dislikes: List, food_interests: Dict) -> Dict[str, float]:
+                              dislikes: List, food_interests: Dict,
+                              scrap_prefs: Dict = None) -> Dict[str, float]:
         """
         Calculate confidence scores for each preference category
 
@@ -172,17 +234,26 @@ class UserPreferenceAggregator:
         # Max confidence at 10 images
         food_interest_score = min(1.0, num_images / 10)
 
-        # Overall confidence: weighted average
+        # Scrap category confidence: Based on number of scraps (NEW)
+        scrap_score = 0.0
+        if scrap_prefs:
+            total_scraps = scrap_prefs.get('total_scraps', 0)
+            # Max confidence at 10 scraps
+            scrap_score = min(1.0, total_scraps / 10)
+
+        # Overall confidence: weighted average (updated weights)
         overall = (
-            taste_score * 0.3 +
-            allergen_score * 0.2 +
-            food_interest_score * 0.5
+            taste_score * 0.25 +
+            allergen_score * 0.15 +
+            food_interest_score * 0.35 +
+            scrap_score * 0.25  # NEW: scrap-based preference weight
         )
 
         return {
             'taste': round(taste_score, 2),
             'allergies': round(allergen_score, 2),
             'food_interests': round(food_interest_score, 2),
+            'scrap_categories': round(scrap_score, 2),  # NEW
             'overall': round(overall, 2),
         }
 
