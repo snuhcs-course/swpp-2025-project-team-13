@@ -163,6 +163,188 @@ class MenuEmbeddingPipeline:
         # Fallback
         return np.random.randn(dim) * 0.1
 
+    def create_menu_embeddings_batch(
+        self,
+        menus: List[Dict],
+        batch_size: int = 32,
+    ) -> List[Optional[List[float]]]:
+        """
+        Create unified menu embeddings for multiple menus in batch.
+        This is much faster than calling create_menu_embedding() individually.
+
+        Args:
+            menus: List of menu dicts, each containing:
+                - name: Menu name
+                - description: Menu description (optional)
+                - category: Food category
+                - ingredients: List of ingredients (optional)
+                - image_embedding: Pre-computed CLIP image embedding (optional)
+            batch_size: Batch size for embedding generation
+
+        Returns:
+            List of 512-d unified embedding vectors (same order as input menus)
+        """
+        if not menus:
+            return []
+
+        try:
+            # Prepare all texts for batch encoding
+            menu_texts = []
+            categories = []
+            all_ingredients = []  # List of ingredient lists per menu
+            image_embeddings = []  # List of image embeddings per menu
+
+            for menu in menus:
+                menu_name = menu.get('name', '')
+                description = menu.get('description', '')
+                category = menu.get('category', '')
+                menu_text = f"{menu_name} {description} {category}".strip()
+                menu_texts.append(menu_text)
+                categories.append(category)
+                all_ingredients.append(menu.get('ingredients', []) if menu.get('ingredients') else [])
+                image_embeddings.append(menu.get('image_embedding'))
+
+            # Batch encode menu texts
+            text_embeddings = []
+            if self.text_model:
+                try:
+                    # Process in batches to avoid memory issues
+                    for i in range(0, len(menu_texts), batch_size):
+                        batch_texts = menu_texts[i:i + batch_size]
+                        batch_embs = self.text_model.encode(
+                            batch_texts,
+                            convert_to_numpy=True,
+                            show_progress_bar=False,
+                            batch_size=batch_size
+                        )
+                        # Ensure 512-d: take first 512 dimensions or pad if smaller
+                        if batch_embs.shape[1] >= 512:
+                            batch_embs = batch_embs[:, :512]
+                        else:
+                            # Pad to 512 dimensions
+                            padding = np.zeros((batch_embs.shape[0], 512 - batch_embs.shape[1]))
+                            batch_embs = np.concatenate([batch_embs, padding], axis=1)
+                        text_embeddings.extend(batch_embs)
+                except Exception as e:
+                    logger.warning(f"Failed to batch encode menu texts: {e}, using fallback")
+                    text_embeddings = [np.random.randn(512) * 0.1 for _ in menus]
+            else:
+                text_embeddings = [np.random.randn(512) * 0.1 for _ in menus]
+
+            # Batch encode categories (unique categories only)
+            unique_categories = list(set(categories))
+            category_embeddings_map = {}
+            if self.text_model and unique_categories:
+                try:
+                    # Process in batches
+                    for i in range(0, len(unique_categories), batch_size):
+                        batch_cats = unique_categories[i:i + batch_size]
+                        batch_embs = self.text_model.encode(
+                            batch_cats,
+                            convert_to_numpy=True,
+                            show_progress_bar=False,
+                            batch_size=batch_size
+                        )
+                        # Ensure 300-d: take first 300 dimensions or pad if smaller
+                        if batch_embs.shape[1] >= 300:
+                            batch_embs = batch_embs[:, :300]
+                        else:
+                            # Pad to 300 dimensions
+                            padding = np.zeros((batch_embs.shape[0], 300 - batch_embs.shape[1]))
+                            batch_embs = np.concatenate([batch_embs, padding], axis=1)
+                        for cat, emb in zip(batch_cats, batch_embs):
+                            category_embeddings_map[cat] = emb
+                except Exception as e:
+                    logger.warning(f"Failed to batch encode categories: {e}")
+
+            # Batch encode ingredients (collect all unique ingredients first)
+            unique_ingredients = set()
+            for ingredients_list in all_ingredients:
+                unique_ingredients.update(ingredients_list)
+            unique_ingredients = list(unique_ingredients)
+
+            ingredient_embeddings_map = {}
+            if self.text_model and unique_ingredients:
+                try:
+                    # Process in batches
+                    for i in range(0, len(unique_ingredients), batch_size):
+                        batch_ings = unique_ingredients[i:i + batch_size]
+                        batch_embs = self.text_model.encode(
+                            batch_ings,
+                            convert_to_numpy=True,
+                            show_progress_bar=False,
+                            batch_size=batch_size
+                        )
+                        # Ensure 300-d: take first 300 dimensions or pad if smaller
+                        if batch_embs.shape[1] >= 300:
+                            batch_embs = batch_embs[:, :300]
+                        else:
+                            # Pad to 300 dimensions
+                            padding = np.zeros((batch_embs.shape[0], 300 - batch_embs.shape[1]))
+                            batch_embs = np.concatenate([batch_embs, padding], axis=1)
+                        for ing, emb in zip(batch_ings, batch_embs):
+                            ingredient_embeddings_map[ing] = emb
+                except Exception as e:
+                    logger.warning(f"Failed to batch encode ingredients: {e}")
+
+            # Combine embeddings for each menu
+            final_embeddings = []
+            for idx, menu in enumerate(menus):
+                try:
+                    embeddings = []
+
+                    # 1. Text embedding
+                    embeddings.append(text_embeddings[idx])
+
+                    # 2. Category embedding
+                    category = categories[idx]
+                    if category in category_embeddings_map:
+                        category_emb = category_embeddings_map[category]
+                    else:
+                        category_emb = self._encode_category(category)
+                    embeddings.append(category_emb)
+
+                    # 3. Ingredient embedding (averaged)
+                    ingredients_list = all_ingredients[idx]
+                    if ingredients_list:
+                        ingredient_embs = []
+                        for ingredient in ingredients_list:
+                            if ingredient in ingredient_embeddings_map:
+                                ingredient_embs.append(ingredient_embeddings_map[ingredient])
+                            else:
+                                # Fallback: encode individually if not in map
+                                ing_emb = self._encode_category(ingredient)  # Reuse category encoder
+                                ingredient_embs.append(ing_emb)
+
+                        if ingredient_embs:
+                            avg_ing_emb = np.mean(ingredient_embs, axis=0)
+                            embeddings.append(avg_ing_emb)
+
+                    # 4. Image embedding (if available)
+                    if image_embeddings[idx]:
+                        embeddings.append(np.array(image_embeddings[idx][:512]))
+
+                    # Combine embeddings
+                    if embeddings:
+                        combined = np.concatenate(embeddings, axis=0)
+                        normalized = combined / (np.linalg.norm(combined) + 1e-10)
+                        final_embedding = normalized[:512].tolist()
+                        final_embeddings.append(final_embedding)
+                    else:
+                        final_embeddings.append((np.random.randn(512) * 0.1).tolist())
+
+                except Exception as e:
+                    logger.warning(f"Error creating batch embedding for menu {idx}: {e}")
+                    final_embeddings.append((np.random.randn(512) * 0.1).tolist())
+
+            logger.info(f"Created {len(final_embeddings)} menu embeddings in batch")
+            return final_embeddings
+
+        except Exception as e:
+            logger.error(f"Error in batch menu embedding creation: {e}")
+            # Fallback: return random embeddings
+            return [(np.random.randn(512) * 0.1).tolist() for _ in menus]
+
 
 class UserEmbeddingAggregator:
     """

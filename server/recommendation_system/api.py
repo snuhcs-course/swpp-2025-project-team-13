@@ -991,22 +991,41 @@ def _recommend_menu_internal(request, phase=None):
         menu_embedding_pipeline = get_menu_embedding_pipeline()
         scored_results = []
 
-        # Process menus without progress bar logging
-        for menu in all_menus:
-            # 메뉴 embedding 생성
-            menu_embedding = None
-            if menu_embedding_pipeline:
-                menu_embedding = menu_embedding_pipeline.create_menu_embedding(
-                    menu_name=menu.get('name', ''),
-                    description=menu.get('description', ''),
-                    category=menu.get('category', ''),
-                    ingredients=menu.get('ingredients', []) if menu.get('ingredients') else None
-                )
+        # 배치 임베딩 생성 (성능 최적화)
+        import time
+        embedding_start_time = time.time()
+        
+        menu_embeddings = None
+        if menu_embedding_pipeline and all_menus:
+            # Prepare menu data for batch processing
+            menu_data_list = []
+            for menu in all_menus:
+                menu_data_list.append({
+                    'name': menu.get('name', ''),
+                    'description': menu.get('description', ''),
+                    'category': menu.get('category', ''),
+                    'ingredients': menu.get('ingredients', []) if menu.get('ingredients') else [],
+                    'image_embedding': menu.get('image_embedding')
+                })
+            
+            # Batch create embeddings
+            menu_embeddings = menu_embedding_pipeline.create_menu_embeddings_batch(
+                menu_data_list,
+                batch_size=32  # Optimal batch size for most models
+            )
+            embedding_end_time = time.time()
+            logger.info(f"✅ 배치 임베딩 생성 완료: {len(all_menus)}개 메뉴, 소요 시간: {embedding_end_time - embedding_start_time:.2f}초")
+        else:
+            menu_embeddings = [None] * len(all_menus)
 
-            # 사용자 위치가 있으면 tuple로 변환
-            user_location = None
-            if 'user_location' in data:
-                user_location = tuple(data['user_location'])
+        # 사용자 위치가 있으면 tuple로 변환
+        user_location = None
+        if 'user_location' in data:
+            user_location = tuple(data['user_location'])
+
+        # Process menus with pre-computed embeddings
+        for idx, menu in enumerate(all_menus):
+            menu_embedding = menu_embeddings[idx] if menu_embeddings else None
 
             # Text similarity 계산 (HybridScorer fallback을 위해)
             similarity_score = calculate_menu_similarity(menu, enhanced_onboarding_data)
