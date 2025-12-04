@@ -9,6 +9,7 @@ import logging
 import random
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Any, Generator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
@@ -450,6 +451,43 @@ def process_query_context(query_text: str, onboarding_data: Dict, user) -> Dict[
         # Continue with original preferences if processing fails
 
     return context_info
+
+
+def _score_single_menu(menu_data: Tuple) -> Tuple[int, Dict, float, Any]:
+    """
+    단일 메뉴에 대한 스코어링을 수행하는 헬퍼 함수 (병렬 처리용)
+    
+    Args:
+        menu_data: (menu, idx, menu_embedding, enhanced_onboarding_data, search_context,
+                   scoring_context, user_embedding, query_context, user_location, rl_weights)
+    
+    Returns:
+        (idx, menu, final_score, components)
+    """
+    menu, idx, menu_embedding, enhanced_onboarding_data, search_context, \
+    scoring_context, user_embedding, query_context, user_location, rl_weights = menu_data
+    
+    try:
+        # Text similarity 계산 (HybridScorer fallback을 위해)
+        similarity_score = calculate_menu_similarity(menu, enhanced_onboarding_data)
+        
+        # Strategy Pattern을 사용한 점수 계산
+        final_score, components = scoring_context.calculate_score(
+            menu=menu,
+            user_prefs=enhanced_onboarding_data,
+            search_context=search_context,
+            text_similarity=similarity_score,
+            user_embedding=user_embedding,
+            menu_embedding=menu_embedding,
+            query_context=query_context,
+            user_location=user_location,
+            weights=rl_weights,
+        )
+        
+        return (idx, menu, final_score, components)
+    except Exception as e:
+        logger.warning(f"Error scoring menu {idx}: {e}")
+        return (idx, menu, 0.0, None)
 
 
 def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_service = None) -> float:
@@ -1023,27 +1061,56 @@ def _recommend_menu_internal(request, phase=None):
         if 'user_location' in data:
             user_location = tuple(data['user_location'])
 
-        # Process menus with pre-computed embeddings
+        # 병렬 스코어링 (성능 최적화)
+        scoring_start_time = time.time()
+        query_context = context_info.get('intent').__dict__ if context_info.get('intent') else None
+        
+        # Prepare data for parallel scoring
+        scoring_tasks = []
         for idx, menu in enumerate(all_menus):
             menu_embedding = menu_embeddings[idx] if menu_embeddings else None
-
-            # Text similarity 계산 (HybridScorer fallback을 위해)
-            similarity_score = calculate_menu_similarity(menu, enhanced_onboarding_data)
-
-            # Strategy Pattern을 사용한 점수 계산
-            final_score, components = scoring_context.calculate_score(
-                menu=menu,
-                user_prefs=enhanced_onboarding_data,
-                search_context=search_context,
-                text_similarity=similarity_score,
-                user_embedding=user_embedding,
-                menu_embedding=menu_embedding,
-                query_context=context_info.get('intent').__dict__ if context_info.get('intent') else None,
-                user_location=user_location,
-                weights=rl_weights,
-            )
-
-            scored_results.append((menu, final_score, components))
+            scoring_tasks.append((
+                menu, idx, menu_embedding, enhanced_onboarding_data, search_context,
+                scoring_context, user_embedding, query_context, user_location, rl_weights
+            ))
+        
+        # 병렬 스코어링 실행
+        scored_results = []
+        max_workers = min(len(all_menus), 8)  # 최대 8개 워커 (CPU 코어 수 고려)
+        
+        if len(all_menus) > 10:  # 메뉴가 많을 때만 병렬 처리
+            logger.info(f"병렬 스코어링 시작: {len(all_menus)}개 메뉴, {max_workers}개 워커")
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all tasks
+                future_to_idx = {
+                    executor.submit(_score_single_menu, task): task[1] 
+                    for task in scoring_tasks
+                }
+                
+                # Collect results as they complete
+                results_dict = {}
+                for future in as_completed(future_to_idx):
+                    try:
+                        idx, menu, final_score, components = future.result()
+                        results_dict[idx] = (menu, final_score, components)
+                    except Exception as e:
+                        task_idx = future_to_idx[future]
+                        logger.error(f"Error in parallel scoring for menu {task_idx}: {e}")
+                        # Fallback: use the menu with zero score
+                        menu = scoring_tasks[task_idx][0]
+                        results_dict[task_idx] = (menu, 0.0, None)
+                
+                # Sort by index to maintain order
+                scored_results = [results_dict[i] for i in sorted(results_dict.keys())]
+        else:
+            # 메뉴가 적을 때는 순차 처리 (오버헤드 방지)
+            logger.info(f"순차 스코어링 실행: {len(all_menus)}개 메뉴")
+            for task in scoring_tasks:
+                idx, menu, final_score, components = _score_single_menu(task)
+                scored_results.append((menu, final_score, components))
+        
+        scoring_end_time = time.time()
+        logger.info(f"✅ 스코어링 완료: {len(scored_results)}개 메뉴, 소요 시간: {scoring_end_time - scoring_start_time:.2f}초")
         
         # ===== 음식점별 다양성 보장 로직 =====
         # 1. 스코어 순으로 정렬
