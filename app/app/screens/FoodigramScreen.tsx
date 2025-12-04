@@ -61,9 +61,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
   const [menuReasons, setMenuReasons] = useState<{ [menuId: string]: string }>({})
   const [reasonLoadingDots, setReasonLoadingDots] = useState<{ [menuId: string]: string }>({})
 
-  // Progress message state
-  const [progressMessage, setProgressMessage] = useState<string>("당신의 취향을 분석 중입니다")
-
   // Request deduplication: track pending requests to prevent duplicate API calls
   const pendingRequestRef = useRef<{
     query: string
@@ -225,8 +222,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         console.log('🚀 Starting Phase 1: Fetching menu recommendations without reasons')
       }
 
-      // Show progress message
-      setProgressMessage("당신의 취향을 분석하고 메뉴를 찾는 중입니다")
       
       const response = await api.getMenuRecommendationsPhase1(userLocation, options)
       
@@ -445,7 +440,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     setIsLoadingRecommendations(true)
     setMenuReasons({}) // Clear previous reasons
     setReasonLoadingDots({}) // Clear previous loading dots
-    setProgressMessage("당신의 취향을 분석 중입니다") // Reset progress message
 
     debouncedFetchRecommendations()
     // Note: isLoadingRecommendations is now controlled by phase1 completion
@@ -492,7 +486,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           setHasMoreData(true)
           setIsLoadingRecommendations(true)
           // Don't clear existing menus/reasons immediately - keep them visible during update
-          setProgressMessage("당신의 취향을 분석 중입니다") // Reset progress message
           debouncedFetchRecommendations().catch((error) => {
             console.error("Failed to refresh recommendations:", error)
             setIsLoadingRecommendations(false)  // Only set false on error
@@ -514,7 +507,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     setHasMoreData(true)
     setIsLoadingRecommendations(true)
     // Don't clear existing menus/reasons immediately - keep them visible during refresh
-    setProgressMessage("당신의 취향을 분석 중입니다") // Reset progress message
     // Use debounced version to prevent accidental double-refresh
     debouncedFetchRecommendations(false).finally(() => {
       setRefreshing(false)
@@ -759,7 +751,6 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
     // Don't clear previous results immediately - keep them visible during query search
     setIsLoadingRecommendations(true)
-    setProgressMessage("당신의 취향을 분석 중입니다") // Reset progress message
 
     try {
       // Fetch recommendations with context query - use debounced version
@@ -955,7 +946,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           <Animated.View style={{ transform: [{ rotate }] }}>
             <UtensilsCrossed size={60} color={colors.palette.primary500} />
           </Animated.View>
-          <Text style={$loadingSubtext}>{progressMessage}</Text>
+          <Text style={$loadingSubtext}>취향을 분석 중입니다</Text>
         </View>
       )
     }
@@ -966,7 +957,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
         <Text style={$emptySubtext}>잠시 후 다시 시도해 주세요</Text>
       </View>
     )
-  }, [isLoadingRecommendations, progressMessage, screenHeight, rotate])
+  }, [isLoadingRecommendations, screenHeight, rotate])
 
   return (
     <View style={$container}>
