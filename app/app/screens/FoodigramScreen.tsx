@@ -69,9 +69,12 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
   // Track current query text for Phase 2
   const currentQueryTextRef = useRef<string | undefined>(undefined)
-  
+
   // Flag to prevent multiple Phase 2 triggers
   const phase2TriggeredRef = useRef(false)
+
+  // Flag to stop Phase 2 requests (e.g., on logout or unmount)
+  const shouldStopPhase2Ref = useRef(false)
 
   // Loading animation for recommendations
   const rotationValue = useRef(new Animated.Value(0)).current
@@ -280,6 +283,14 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
   // Phase 2: Generate single reason for one menu
   const generateSingleReason = useCallback(async (menuId: string, queryText?: string) => {
+    // Stop if flagged (e.g., user logged out)
+    if (shouldStopPhase2Ref.current) {
+      if (__DEV__) {
+        console.log('⏹️ Phase 2 stopped - skipping reason generation for:', menuId)
+      }
+      return
+    }
+
     try {
       if (__DEV__) {
         console.log('🔄 Generating reason for menu:', menuId)
@@ -298,7 +309,18 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
       
       if (!response.ok) {
         console.error("Failed to fetch single reason:", response.problem)
-        // Clear loading dots for this menu on error
+
+        // If 401 Unauthorized (user logged out), stop all further Phase 2 requests
+        if (response.status === 401) {
+          if (__DEV__) {
+            console.log('🚫 Unauthorized - stopping all Phase 2 requests')
+          }
+          shouldStopPhase2Ref.current = true
+          setReasonLoadingDots({}) // Clear all loading dots
+          return
+        }
+
+        // Clear loading dots for this menu on other errors
         setReasonLoadingDots(prev => {
           const newDots = { ...prev }
           delete newDots[menuId]
@@ -359,15 +381,23 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 
       // Generate reasons sequentially (one by one)
       for (let i = 0; i < menuIds.length; i++) {
+        // Check if we should stop (e.g., user logged out)
+        if (shouldStopPhase2Ref.current) {
+          if (__DEV__) {
+            console.log('⏹️ Phase 2 loop stopped early')
+          }
+          break
+        }
+
         const menuId = menuIds[i]
-        
+
         if (__DEV__) {
           console.log(`🔄 Sequential Phase 2: ${i + 1}/${menuIds.length} - ${menuId}`)
         }
 
         // Generate reason for this menu
         await generateSingleReason(menuId, queryText)
-        
+
         // Small delay between requests to avoid overwhelming the server
         if (i < menuIds.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 500))
@@ -437,6 +467,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     if (hasInitializedRef.current) return
 
     hasInitializedRef.current = true
+    shouldStopPhase2Ref.current = false // Reset stop flag on mount
     setIsLoadingRecommendations(true)
     setMenuReasons({}) // Clear previous reasons
     setReasonLoadingDots({}) // Clear previous loading dots
@@ -444,8 +475,9 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     debouncedFetchRecommendations()
     // Note: isLoadingRecommendations is now controlled by phase1 completion
 
-    // Cleanup: clear pending requests on unmount
+    // Cleanup: stop Phase 2 and clear pending requests on unmount
     return () => {
+      shouldStopPhase2Ref.current = true // Stop any ongoing Phase 2 requests
       pendingRequestRef.current = null
     }
   }, [debouncedFetchRecommendations]) // Include debouncedFetchRecommendations in deps

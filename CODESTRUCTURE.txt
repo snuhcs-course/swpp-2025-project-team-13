@@ -1,0 +1,154 @@
+  🎯 System Architecture Overview
+
+  User Login → Onboarding (Preferences) → FoodigramScreen
+                                                ↓
+                                API Request: /recommendations/
+                                                ↓
+                      Backend 7-Step Pipeline
+
+  📊 Data Sources Used
+
+  1. User Preferences (from Onboarding):
+    - Taste levels (0-5 scale): spicy, salty, sweet, oily, chewy
+    - Allergies/Restrictions
+    - Preferred cuisines
+    - Exploration preference (how adventurous)
+  2. User Behavior:
+    - Liked/Scrap history
+    - Search interactions
+  3. Restaurant/Menu Data:
+    - Location (PostGIS geometry)
+    - Ratings & reviews
+    - Menu items with descriptions
+    - Keywords (Korean NLP processed)
+  4. Vector Embeddings:
+    - Menu descriptions → KoSimCSE-roberta embeddings
+    - User preferences → Text embeddings
+    - Used for semantic similarity matching
+
+  🔧 Recommendation Algorithm (7-Step Pipeline)
+
+  Step 1: Spatial Query (PostGIS)
+
+  - Query restaurants within distance threshold (typically 300-500m)
+  - Uses user's location coordinates
+  - File: recommendation_system/client.py:1000+
+
+  Step 2: Category Filtering
+
+  - Resolve cuisine aliases (e.g., "중식" → "Chinese")
+  - Filter by user's preferred cuisines
+  - File: recommendation_system/api.py:768
+
+  Step 3: Menu Fetching
+
+  - Retrieve menus from matching restaurants
+  - Cache embeddings from .npy files
+  - File: menu_embeddings_batch_1_1.npy
+
+  Step 4: Text Similarity Matching
+
+  - Compare user preference embeddings with menu item embeddings
+  - Calculate cosine similarity (0-1 scale)
+  - Uses KoSimCSE model
+
+  Step 5: Hybrid Scoring (Weighted Formula)
+
+  score = 0.65×similarity_score 
+        + 0.20×popularity_score
+        + 0.10×distance_score 
+        + 0.05×price_relevance
+        + 0.10×freshness_bonus
+        - 1.0×any_penalties
+
+  File: recommendation_system/scoring.py:461
+
+  Step 6: Diversity & Deduplication
+
+  - Round-robin algorithm: Rotates through restaurants
+  - MMR (Maximal Marginal Relevance): Removes similar recommendations
+  - Ensures variety in results
+
+  Step 7: Response & Explanation
+
+  - Returns top 20 items (configurable)
+  - Includes explanation for why each item was recommended
+  - File: users/views.py
+
+  📱 Frontend Flow
+
+  FoodigramScreen.tsx (280+ lines):
+  1. Fetches recommendations on load
+  2. Displays in swipeable cards
+  3. Shows menu name, restaurant, distance, rating
+  4. Allows liking/scrapping items
+  5. Handles "More" button to fetch next batch
+
+  FoodigramScreen
+    ↓
+  useRecommendations hook
+    ↓
+  api.getMenuRecommendations()
+    ↓
+  Recommendation display & interaction
+
+  🎛️ Ordering & Ranking
+
+  Primary Order: Score (highest first)
+  - Similarity dominates (65% weight)
+  - Popularity breaks ties (20%)
+  - Distance is secondary factor (10%)
+
+  Secondary Handling:
+  - Restaurants with multiple matching items are spread out (round-robin)
+  - Duplicate cuisines are filtered
+  - Saved/liked items are deprioritized
+
+  🔑 Key Files & Components
+
+  Backend:
+  - recommendation_system/api.py - Main recommendation endpoint (POST /recommendations/)
+  - recommendation_system/scoring.py - Hybrid scoring logic
+  - recommendation_system/client.py - PostGIS queries, embeddings, semantic search
+  - menu/models.py - Menu items with embeddings
+  - users/views.py - Recommendation API view
+
+  Frontend:
+  - FoodigramScreen.tsx - Main recommendation display
+  - OnboardingScreen.tsx - User preference collection (360+ lines)
+  - useRecommendations hook - API integration
+
+  Data Files:
+  - menu_embeddings_batch_1_1.npy - Pre-computed menu embeddings
+  - chroma_db/ - Vector database for similarity search
+
+  📈 Performance Characteristics
+
+  - Spatial Query: 300-500ms (PostGIS)
+  - Menu Fetch: 100-200ms
+  - Scoring & Ranking: 50-100ms
+  - Total Response: ~500-800ms
+
+  🎯 Recommendation Quality Factors
+
+  Higher Score if:
+  - ✅ Menu description matches user taste preferences
+  - ✅ Restaurant is highly rated
+  - ✅ Close to user location
+  - ✅ Price range matches user budget
+  - ✅ Recent additions (freshness bonus)
+
+  Lower Score if:
+  - ❌ User has already seen/saved item
+  - ❌ Contains known allergens
+  - ❌ Outside preferred cuisine categories
+  - ❌ Too far away
+  - ❌ Too expensive
+
+  ---
+  The detailed analysis documents created contain:
+  - Complete code references (file:line)
+  - Visual architecture diagrams
+  - Implementation details
+  - Tuning parameters
+  - Enhancement opportunities
