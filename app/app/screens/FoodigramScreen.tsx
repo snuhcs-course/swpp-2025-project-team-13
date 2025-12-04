@@ -18,6 +18,8 @@ import {
   TextInput,
   Modal,
   Pressable,
+  Linking,
+  Platform,
 } from "react-native"
 import { ScrapToast, Text } from "../components"
 import { useStores } from "../models"
@@ -771,28 +773,66 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
     }
   }, [queryContext, debouncedFetchRecommendations])
 
+  // Open Naver Map with menu location (Android only)
+  const openNaverMap = useCallback(async (menu: MenuRecommendationItem) => {
+    if (Platform.OS !== 'android') {
+      return
+    }
+
+    if (!menu.coordinates || menu.coordinates.length < 2) {
+      console.warn('Menu coordinates not available:', menu.place_name)
+      return
+    }
+
+    const [lng, lat] = menu.coordinates // coordinates is [longitude, latitude]
+    const placeName = encodeURIComponent(menu.place_name || '')
+    const appName = 'com.foodigram'
+
+    // Naver Map Intent URL format for Android
+    // intent://place?lat={위도}&lng={경도}&name={장소명}&appname={앱이름}#Intent;scheme=nmap;package=com.nhn.android.nmap;end
+    const intentUrl = `intent://place?lat=${lat}&lng=${lng}&name=${placeName}&appname=${appName}#Intent;scheme=nmap;package=com.nhn.android.nmap;end`
+
+    try {
+      const canOpen = await Linking.canOpenURL(intentUrl)
+      if (canOpen) {
+        await Linking.openURL(intentUrl)
+      } else {
+        // Fallback: try direct nmap:// scheme
+        const directUrl = `nmap://place?lat=${lat}&lng=${lng}&name=${placeName}&appname=${appName}`
+        await Linking.openURL(directUrl)
+      }
+    } catch (error) {
+      console.error('Failed to open Naver Map:', error)
+    }
+  }, [])
+
   const screenHeight = Dimensions.get("window").height
 
   // Render individual menu item
   const renderMenuItem: ListRenderItem<MenuRecommendationItem> = useCallback(({ item: menu }) => {
     return (
-      <ImageBackground
-        source={{
-          uri:
-            menu.image_urls && menu.image_urls.length > 0
-              ? menu.image_urls[0]
-              : undefined,
-        }}
-        style={[$backgroundImage, { height: screenHeight }]}
-        resizeMode="cover"
-        onLoadStart={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: true }))}
-        onLoadEnd={() => {
-          setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))
-          // Trigger Phase 2 when first food image loads
-          triggerPhase2OnImageLoad()
-        }}
-        onError={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={() => openNaverMap(menu)}
+        style={$menuCardContainer}
       >
+        <ImageBackground
+          source={{
+            uri:
+              menu.image_urls && menu.image_urls.length > 0
+                ? menu.image_urls[0]
+                : undefined,
+          }}
+          style={[$backgroundImage, { height: screenHeight }]}
+          resizeMode="cover"
+          onLoadStart={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: true }))}
+          onLoadEnd={() => {
+            setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))
+            // Trigger Phase 2 when first food image loads
+            triggerPhase2OnImageLoad()
+          }}
+          onError={() => setIsImageLoading((prev) => ({ ...prev, [menu.id]: false }))}
+        >
         {/* Image Loading Indicator */}
         {isImageLoading[menu.id] && (
           <View style={$imageLoadingContainer}>
@@ -825,7 +865,10 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
           </Text>
           <TouchableOpacity
             style={$headerButton}
-            onPress={() => toggleBookmark(menu)}
+            onPress={(e) => {
+              e.stopPropagation()
+              toggleBookmark(menu)
+            }}
           >
             <Bookmark
               size={24}
@@ -861,9 +904,10 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
             )}
           </View>
         </View>
-      </ImageBackground>
+        </ImageBackground>
+      </TouchableOpacity>
     )
-  }, [screenHeight, isImageLoading, toggleBookmark, menuScrapStore.scrappedMenus.length, menuReasons, reasonLoadingDots, triggerPhase2OnImageLoad])
+  }, [screenHeight, isImageLoading, toggleBookmark, menuScrapStore.scrappedMenus.length, menuReasons, reasonLoadingDots, triggerPhase2OnImageLoad, openNaverMap])
 
   // Get item layout for performance optimization
   const getItemLayout = useCallback(
@@ -1092,6 +1136,10 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
 const $container: ViewStyle = {
   flex: 1,
   backgroundColor: colors.background,
+}
+
+const $menuCardContainer: ViewStyle = {
+  flex: 1,
 }
 
 const $fullScreenContainer: ViewStyle = {

@@ -9,7 +9,9 @@ import {
   TextStyle,
   TouchableOpacity,
   View,
-  ViewStyle
+  ViewStyle,
+  Linking,
+  Platform,
 } from "react-native"
 import { Text } from "../components"
 import { useStores } from "../models"
@@ -33,6 +35,41 @@ export const ScrapScreen: React.FC<ScrapScreenProps> = observer(function ScrapSc
       console.log("🔍 ScrapScreen: Menu names:", scrappedMenus.map(m => m.menu_name))
     }
   }, [scrappedMenus.length])
+
+  // Open Naver Map with menu location (Android only)
+  const openNaverMap = React.useCallback(async (menu: typeof scrappedMenus[0]) => {
+    if (Platform.OS !== 'android') {
+      return
+    }
+
+    if (!menu.coordinates || menu.coordinates.length < 2) {
+      console.warn('Menu coordinates not available:', menu.place_name)
+      return
+    }
+
+    // Convert MST array to regular array
+    const coords = Array.from(menu.coordinates)
+    const [lng, lat] = coords as [number, number] // coordinates is [longitude, latitude]
+    const placeName = encodeURIComponent(menu.place_name || '')
+    const appName = 'com.foodigram'
+
+    // Naver Map Intent URL format for Android
+    // intent://place?lat={위도}&lng={경도}&name={장소명}&appname={앱이름}#Intent;scheme=nmap;package=com.nhn.android.nmap;end
+    const intentUrl = `intent://place?lat=${lat}&lng=${lng}&name=${placeName}&appname=${appName}#Intent;scheme=nmap;package=com.nhn.android.nmap;end`
+
+    try {
+      const canOpen = await Linking.canOpenURL(intentUrl)
+      if (canOpen) {
+        await Linking.openURL(intentUrl)
+      } else {
+        // Fallback: try direct nmap:// scheme
+        const directUrl = `nmap://place?lat=${lat}&lng=${lng}&name=${placeName}&appname=${appName}`
+        await Linking.openURL(directUrl)
+      }
+    } catch (error) {
+      console.error('Failed to open Naver Map:', error)
+    }
+  }, [])
   
 
   return (
@@ -55,8 +92,10 @@ export const ScrapScreen: React.FC<ScrapScreenProps> = observer(function ScrapSc
           ) : (
             <View style={$photoGrid}>
               {scrappedMenus.map((menu) => (
-                <View
+                <TouchableOpacity
                   key={menu.id}
+                  activeOpacity={0.9}
+                  onPress={() => openNaverMap(menu)}
                   style={[$photoCard, { width: imageSize, height: imageSize + 48 }]}
                 >
                   <View style={[$imageContainer, { height: imageSize }]}>
@@ -82,7 +121,10 @@ export const ScrapScreen: React.FC<ScrapScreenProps> = observer(function ScrapSc
                     {/* X Remove Button */}
                     <TouchableOpacity
                       style={$removeButton}
-                      onPress={() => menuScrapStore.removeScrappedMenu(menu.id)}
+                      onPress={(e) => {
+                        e.stopPropagation()
+                        menuScrapStore.removeScrappedMenu(menu.id)
+                      }}
                     >
                       <View style={$removeButtonBackground}>
                         <X size={14} color="#FFFFFF" strokeWidth={2.5} />
@@ -106,7 +148,7 @@ export const ScrapScreen: React.FC<ScrapScreenProps> = observer(function ScrapSc
                       </Text>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           )}
