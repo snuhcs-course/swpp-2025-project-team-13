@@ -506,17 +506,35 @@ def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_servi
         score = 0.0
         weight_sum = 0.0
         
-        # 1. 카테고리 매칭 (가중치: 0.4)
+        # 1. 카테고리 매칭 (가중치: 0.35)
         preferred_categories = onboarding_data.get('preferred_categories', [])
         if preferred_categories:
             menu_category = menu.get('category', '')
             # category_normalized 사용
             menu_category_normalized = menu.get('category_normalized', menu_category)
             if menu_category_normalized in preferred_categories:
-                score += 0.4
-            weight_sum += 0.4
+                score += 0.35
+            weight_sum += 0.35
+
+        # 2. 스크랩 기반 카테고리 선호도 (가중치: 0.15)
+        scrap_category_prefs = onboarding_data.get('scrap_category_preferences', {})
+        if scrap_category_prefs:
+            category_scores = scrap_category_prefs.get('category_preferences', {})
+            menu_category = menu.get('category', '')
+            menu_category_normalized = menu.get('category_normalized', menu_category)
+
+            if menu_category_normalized in category_scores:
+                scrap_score = category_scores[menu_category_normalized]
+                score += 0.15 * scrap_score
+            elif menu.get('name'):
+                inferred_category = extract_category_from_menu_name(menu['name'])
+                if inferred_category in category_scores:
+                    scrap_score = category_scores[inferred_category]
+                    score += 0.15 * scrap_score * 0.7
+
+            weight_sum += 0.15
         
-        # 2. 키워드 매칭 (가중치: 0.3)
+        # 3. 키워드 매칭 (가중치: 0.25)
         menu_keywords = menu.get('keywords', [])
         if menu_keywords and isinstance(menu_keywords, list):
             # 사용자 선호 키워드와 비교
@@ -531,21 +549,21 @@ def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_servi
                 overlap = len(menu_keywords_set.intersection(liked_keywords))
                 if len(menu_keywords_set) > 0:
                     keyword_score = overlap / len(menu_keywords_set)
-                    score += 0.3 * keyword_score
-            weight_sum += 0.3
+                    score += 0.25 * keyword_score
+            weight_sum += 0.25
         
-        # 3. 가격 적합도 (가중치: 0.2)
+        # 4. 가격 적합도 (가중치: 0.15)
         budget_range = onboarding_data.get('budget_range', [0, 0])
         menu_price = menu.get('price', 0)
         if budget_range[0] > 0 or budget_range[1] > 0:
             if budget_range[0] <= menu_price <= budget_range[1]:
-                score += 0.2
+                score += 0.15
             elif menu_price < budget_range[0]:
                 # 예산보다 저렴하면 부분 점수
-                score += 0.1
-            weight_sum += 0.2
+                score += 0.075
+            weight_sum += 0.15
         
-        # 4. 임베딩 유사도 (옵션, 가중치: 0.1)
+        # 5. 임베딩 유사도 (옵션, 가중치: 0.1)
         if embedding_service and menu.get('embedding_vector'):
             # 사용자 프로필 텍스트와 메뉴 임베딩 비교
             # 향후 구현 가능
@@ -895,6 +913,21 @@ def _recommend_menu_internal(request, phase=None):
 
         context_info = process_query_context(query_text, onboarding_data, request.user)
         enhanced_onboarding_data = context_info.get('enhanced_preferences', onboarding_data)
+
+        # 스크랩 기반 카테고리 선호도 적용
+        try:
+            scrap_service = ScrapCategoryPreferenceService(request.user)
+            scrap_prefs = scrap_service.get_category_preference_profile()
+            enhanced_onboarding_data['scrap_category_preferences'] = scrap_prefs
+
+            existing_categories = set(enhanced_onboarding_data.get('preferred_categories', []))
+            scrap_top_categories = set(scrap_prefs.get('top_categories', []))
+            merged_categories = list(existing_categories | scrap_top_categories)[:10]
+            enhanced_onboarding_data['preferred_categories'] = merged_categories
+
+            logger.info(f"User {request.user.id} scrap-based categories: {scrap_prefs.get('top_categories', [])}")
+        except Exception as e:
+            logger.debug(f"Could not add scrap category preferences: {e}")
 
         # 검색 컨텍스트 생성 (쿼리 컨텍스트로 강화된 선호도 사용)
         search_context = SearchContext(
