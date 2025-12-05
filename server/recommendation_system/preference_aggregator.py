@@ -8,7 +8,8 @@ Aggregates user preferences from multiple sources:
 - Allergies and disliked ingredients
 - Favorite cuisines
 - Recent food images (inferred food types)
-- Scrap-based category preferences (NEW)
+- Scrap-based category preferences
+- Gallery image-based category preferences (NEW)
 """
 
 from typing import Dict, List, Any
@@ -82,14 +83,28 @@ class UserPreferenceAggregator:
         # 4. Inferred food interests from gallery images
         food_interests = self._get_food_interests()
 
-        # 5. Scrap-based category preferences (NEW)
+        # 5. Scrap-based category preferences
         scrap_category_prefs = self._get_scrap_category_preferences()
 
-        # 6. Merge cuisines with scrap-based preferences
-        merged_cuisines = self._merge_cuisine_preferences(cuisines, scrap_category_prefs)
+        # 6. Gallery image-based category preferences (NEW)
+        gallery_category_prefs = self._get_gallery_category_preferences()
 
-        # 7. Calculate confidence scores
-        confidence = self._calculate_confidence(taste_prefs, allergies, dislikes, food_interests, scrap_category_prefs)
+        # 7. Combined category preferences (scrap + gallery)
+        combined_category_prefs = self._get_combined_category_preferences()
+
+        # 8. Merge cuisines with scrap-based and gallery-based preferences
+        merged_cuisines = self._merge_cuisine_preferences(
+            cuisines, scrap_category_prefs, gallery_category_prefs
+        )
+
+        # 9. Get exploration analysis from gallery
+        exploration_analysis = gallery_category_prefs.get('exploration_analysis', {})
+
+        # 10. Calculate confidence scores
+        confidence = self._calculate_confidence(
+            taste_prefs, allergies, dislikes, food_interests,
+            scrap_category_prefs, gallery_category_prefs
+        )
 
         return {
             'user_id': self.user.id,
@@ -99,8 +114,11 @@ class UserPreferenceAggregator:
             'disliked_ingredients': dislikes,
             'favorite_cuisines': merged_cuisines,
             'inferred_food_interests': food_interests,
-            'scrap_category_preferences': scrap_category_prefs,  # NEW
+            'scrap_category_preferences': scrap_category_prefs,
+            'gallery_category_preferences': gallery_category_prefs,  # NEW
+            'combined_category_preferences': combined_category_prefs,  # NEW
             'exploration_preference': self.preference.exploration_preference,
+            'gallery_exploration_analysis': exploration_analysis,  # NEW
             'confidence': confidence,
             'total_gallery_images': self._get_total_gallery_images(),
         }
@@ -186,27 +204,91 @@ class UserPreferenceAggregator:
                 'total_scraps': 0
             }
 
-    def _merge_cuisine_preferences(self, explicit_cuisines: List[str],
-                                   scrap_prefs: Dict[str, Any]) -> List[str]:
+    def _get_gallery_category_preferences(self) -> Dict[str, Any]:
         """
-        Merge explicit cuisine preferences with scrap-based preferences
+        Get category preferences based on user's gallery images (CLIP-labeled)
 
-        Priority: Explicit > Scrap-based
+        Returns:
+            {
+                'category_counts': {'중식': 10, '한식': 5},
+                'category_preferences': {'중식': 0.667, '한식': 0.333},
+                'top_categories': ['중식', '한식'],
+                'total_images': 15,
+                'exploration_analysis': {
+                    'entropy': 0.85,
+                    'concentration': 0.4,
+                    'exploration_tendency': 'diverse',
+                    'suggested_exploration_preference': 3.5
+                }
+            }
+        """
+        try:
+            from users.gallery_category_service import GalleryCategoryPreferenceService
+            service = GalleryCategoryPreferenceService(self.user)
+            return service.get_gallery_category_preference_profile()
+        except Exception as e:
+            logger.warning(f"Error getting gallery category preferences: {e}")
+            return {
+                'category_counts': {},
+                'category_preferences': {},
+                'top_categories': [],
+                'total_images': 0,
+                'exploration_analysis': {}
+            }
+
+    def _get_combined_category_preferences(self) -> Dict[str, float]:
+        """
+        Get combined category preferences from both scrap and gallery sources
+
+        Gallery images weighted higher (60%) as they represent actual eating habits
+
+        Returns:
+            Combined category preference scores
+        """
+        try:
+            from users.gallery_category_service import get_combined_category_preferences
+            return get_combined_category_preferences(self.user)
+        except Exception as e:
+            logger.warning(f"Error getting combined category preferences: {e}")
+            return {}
+
+    def _merge_cuisine_preferences(self, explicit_cuisines: List[str],
+                                   scrap_prefs: Dict[str, Any],
+                                   gallery_prefs: Dict[str, Any] = None) -> List[str]:
+        """
+        Merge explicit cuisine preferences with scrap-based and gallery-based preferences
+
+        Priority: Explicit > Gallery > Scrap
+        (Gallery images represent actual eating habits, so ranked higher than scraps)
         """
         explicit_set = set(explicit_cuisines or [])
         scrap_top = set(scrap_prefs.get('top_categories', []))
+        gallery_top = set((gallery_prefs or {}).get('top_categories', []))
 
-        # Merge with explicit cuisines taking priority
-        merged = list(explicit_set | scrap_top)
+        # Merge all sources
+        merged = list(explicit_set | scrap_top | gallery_top)
 
-        # Sort by preference score (scrap-based scores for those available)
+        # Get preference scores from both sources
         scrap_scores = scrap_prefs.get('category_preferences', {})
+        gallery_scores = (gallery_prefs or {}).get('category_preferences', {})
 
         def sort_key(cuisine):
-            # Explicit cuisines get score 2.0, scrap-based get their score
-            if cuisine in explicit_set and cuisine not in scrap_top:
-                return 2.0
-            return scrap_scores.get(cuisine, 0.5)
+            # Priority scoring:
+            # - Explicit cuisines: base 2.0
+            # - Gallery-based: add gallery score * 1.5 (weighted higher)
+            # - Scrap-based: add scrap score
+            score = 0.0
+
+            if cuisine in explicit_set:
+                score += 2.0
+
+            if cuisine in gallery_scores:
+                score += gallery_scores[cuisine] * 1.5  # Gallery weighted higher
+
+            if cuisine in scrap_scores:
+                score += scrap_scores[cuisine]
+
+            return score if score > 0 else 0.1
 
         merged.sort(key=sort_key, reverse=True)
 
@@ -214,7 +296,8 @@ class UserPreferenceAggregator:
 
     def _calculate_confidence(self, taste_prefs: Dict, allergies: List,
                               dislikes: List, food_interests: Dict,
-                              scrap_prefs: Dict = None) -> Dict[str, float]:
+                              scrap_prefs: Dict = None,
+                              gallery_prefs: Dict = None) -> Dict[str, float]:
         """
         Calculate confidence scores for each preference category
 
@@ -234,26 +317,36 @@ class UserPreferenceAggregator:
         # Max confidence at 10 images
         food_interest_score = min(1.0, num_images / 10)
 
-        # Scrap category confidence: Based on number of scraps (NEW)
+        # Scrap category confidence: Based on number of scraps
         scrap_score = 0.0
         if scrap_prefs:
             total_scraps = scrap_prefs.get('total_scraps', 0)
             # Max confidence at 10 scraps
             scrap_score = min(1.0, total_scraps / 10)
 
+        # Gallery category confidence: Based on number of labeled images (NEW)
+        gallery_score = 0.0
+        if gallery_prefs:
+            total_gallery_images = gallery_prefs.get('total_images', 0)
+            # Max confidence at 15 images
+            gallery_score = min(1.0, total_gallery_images / 15)
+
         # Overall confidence: weighted average (updated weights)
+        # Gallery images weighted higher as they represent actual eating habits
         overall = (
-            taste_score * 0.25 +
-            allergen_score * 0.15 +
-            food_interest_score * 0.35 +
-            scrap_score * 0.25  # NEW: scrap-based preference weight
+            taste_score * 0.20 +
+            allergen_score * 0.10 +
+            food_interest_score * 0.25 +
+            scrap_score * 0.15 +
+            gallery_score * 0.30  # NEW: gallery-based preference weight (highest)
         )
 
         return {
             'taste': round(taste_score, 2),
             'allergies': round(allergen_score, 2),
             'food_interests': round(food_interest_score, 2),
-            'scrap_categories': round(scrap_score, 2),  # NEW
+            'scrap_categories': round(scrap_score, 2),
+            'gallery_categories': round(gallery_score, 2),  # NEW
             'overall': round(overall, 2),
         }
 

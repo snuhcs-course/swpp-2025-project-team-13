@@ -115,6 +115,16 @@ def upload_user_photo(*, user: User, photo_url: str, local_uri: str, image_bytes
                         'original_ai_label', 'label_alternatives'
                     ])
                     logger.info(f"Labeled image {photo.id}: {photo.ai_label} (confidence: {photo.label_confidence:.2f})")
+                    
+                    # 갤러리 기반 카테고리 선호도 및 탐험 성향 업데이트 (NEW)
+                    try:
+                        from users.gallery_category_service import update_gallery_category_preference_on_upload
+                        update_gallery_category_preference_on_upload(user)
+                        logger.info(f"Updated gallery category preferences for user {user.id}")
+                    except Exception as pref_error:
+                        logger.warning(f"Failed to update gallery preferences for user {user.id}: {pref_error}")
+                        # Don't fail the upload if preference update fails
+                        
                 except Exception as db_error:
                     # If the new fields don't exist yet (migration not applied), log warning and continue
                     logger.warning(f"Could not save labels for image {photo.id}: {db_error}. Database migration may not be applied.")
