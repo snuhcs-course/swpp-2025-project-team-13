@@ -251,9 +251,11 @@ class ScrapCategoryPreferenceService:
         Returns:
             카테고리별 개수 딕셔너리 (예: {'중식': 5, '한식': 3})
         """
+        from users.models import UserScrap
+        
         category_counts = Counter()
 
-        # UserRemoteScrap에서 카테고리 추출
+        # 1. UserRemoteScrap에서 카테고리 추출
         remote_scraps = UserRemoteScrap.objects.filter(user=self.user)
 
         for scrap in remote_scraps:
@@ -267,6 +269,21 @@ class ScrapCategoryPreferenceService:
                 menu_category = extract_category_from_menu_name(scrap.menu_name)
                 if menu_category != '기타':
                     category_counts[menu_category] += 1
+
+        # 2. UserScrap에서 카테고리 추출 (Restaurant 기반)
+        local_scraps = UserScrap.objects.filter(user=self.user).select_related('restaurant')
+        
+        for scrap in local_scraps:
+            if scrap.restaurant:
+                # restaurant의 category 사용
+                if hasattr(scrap.restaurant, 'category') and scrap.restaurant.category:
+                    normalized = normalize_category(scrap.restaurant.category)
+                    category_counts[normalized] += 1
+                # restaurant name에서 카테고리 추출 시도
+                elif hasattr(scrap.restaurant, 'name') and scrap.restaurant.name:
+                    menu_category = extract_category_from_menu_name(scrap.restaurant.name)
+                    if menu_category != '기타':
+                        category_counts[menu_category] += 1
 
         logger.info(f"User {self.user.id} scrap category counts: {dict(category_counts)}")
         return dict(category_counts)
