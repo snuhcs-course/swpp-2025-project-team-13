@@ -4,10 +4,29 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from .models import User, Follow, UserScrap, UserPreference, UserGalleryImage, UserInteraction, RLWeightHistory
-from .serializers import UserSerializer, ProfileSerializer, FollowSerializer, UserScrapSerializer, UserPreferenceSerializer, UserGalleryImageSerializer, UserInteractionSerializer, RLWeightHistorySerializer
 from restaurant.models import Restaurant
+from .models import (
+    User,
+    Follow,
+    UserScrap,
+    UserPreference,
+    UserGalleryImage,
+    UserInteraction,
+    RLWeightHistory,
+    UserRemoteScrap,
+)
+from .serializers import (
+    UserSerializer,
+    ProfileSerializer,
+    FollowSerializer,
+    UserScrapSerializer,
+    UserPreferenceSerializer,
+    UserGalleryImageSerializer,
+    UserInteractionSerializer,
+    RLWeightHistorySerializer,
+)
 from . import services
+from .scrap_category_service import ScrapCategoryPreferenceService, update_category_preference_on_scrap
 import logging
 
 logger = logging.getLogger(__name__)
@@ -150,17 +169,17 @@ class PhotoViewSet(viewsets.ViewSet):
         """Restore gallery images from AWS metadata to database"""
         from django.utils import timezone
         from datetime import datetime
-        
+
         gallery_data = request.data
         if not isinstance(gallery_data, list):
             return Response(
                 {'error': 'Expected list of gallery items'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         restored_count = 0
         skipped_count = 0
-        
+
         for item in gallery_data:
             try:
                 # Parse datetime fields
@@ -168,17 +187,17 @@ class PhotoViewSet(viewsets.ViewSet):
                 label_edited_at = None
                 if item.get('label_edited_at'):
                     label_edited_at = datetime.fromisoformat(item['label_edited_at'].replace('Z', '+00:00'))
-                
+
                 # Check if image already exists (avoid duplicates)
                 existing = UserGalleryImage.objects.filter(
                     user=request.user,
                     image_url=item['image_url']
                 ).first()
-                
+
                 if existing:
                     skipped_count += 1
                     continue
-                
+
                 # Create gallery image record
                 UserGalleryImage.objects.create(
                     user=request.user,
@@ -195,11 +214,11 @@ class PhotoViewSet(viewsets.ViewSet):
                     created_at=created_at,
                 )
                 restored_count += 1
-                
+
             except Exception as e:
                 logger.error(f"Error restoring gallery item: {e}")
                 continue
-        
+
         return Response({
             'message': f'Successfully restored {restored_count} gallery items, skipped {skipped_count} duplicates',
             'restored': restored_count,
@@ -365,7 +384,7 @@ class ScrapViewSet(viewsets.GenericViewSet):
         print(f"🍽️ DEBUG TOGGLE: Restaurant ID {restaurant_id}, Name: {restaurant_name}")
 
         restaurant = None
-        
+
         if restaurant_id:
             try:
                 # First try to find by Django model ID (integer)
@@ -377,7 +396,7 @@ class ScrapViewSet(viewsets.GenericViewSet):
                     print(f"🎯 DEBUG TOGGLE: Found restaurant by source UUID - Django ID: {restaurant.id}")
                 except Restaurant.DoesNotExist:
                     pass
-        
+
         # If no restaurant found by ID, try to find by name
         if not restaurant and restaurant_name:
             try:
@@ -389,39 +408,39 @@ class ScrapViewSet(viewsets.GenericViewSet):
                 similar = Restaurant.objects.filter(name__icontains=restaurant_name.split()[0])[:3]
                 print(f"🔍 DEBUG TOGGLE: Similar restaurants: {[r.name for r in similar]}")
                 pass
-        
+
         # If restaurant still not found, try to create it from recommendation system data
         if not restaurant and restaurant_id and restaurant_name:
             try:
                 # Query the recommendation database to get restaurant details
                 from psql.preprocess.preprocess import get_db_connection
                 import uuid
-                
+
                 # Validate UUID format
                 try:
                     uuid.UUID(restaurant_id)
                     is_valid_uuid = True
                 except ValueError:
                     is_valid_uuid = False
-                
+
                 if is_valid_uuid:
                     conn = get_db_connection()
                     cursor = conn.cursor()
-                    
+
                     try:
                         # Query restaurant from recommendation database
                         cursor.execute("""
                             SELECT name, address, ST_Y(geom::geometry) as latitude, ST_X(geom::geometry) as longitude
-                            FROM db_restaurants 
+                            FROM db_restaurants
                             WHERE id = %s
                         """, [restaurant_id])
-                        
+
                         restaurant_data = cursor.fetchone()
-                        
+
                         if restaurant_data:
                             name, address, lat, lng = restaurant_data
                             print(f"🏗️ DEBUG TOGGLE: Creating new restaurant from recommendation data: {name}")
-                            
+
                             # Create new restaurant in Django ORM
                             restaurant = Restaurant.objects.create(
                                 name=name,
@@ -438,10 +457,10 @@ class ScrapViewSet(viewsets.GenericViewSet):
                     finally:
                         cursor.close()
                         conn.close()
-                        
+
             except Exception as create_error:
                 print(f"❌ DEBUG TOGGLE: Error creating restaurant: {create_error}")
-        
+
         if not restaurant:
             return Response(
                 {"error": "restaurant_id or restaurant_name is required and must match an existing restaurant"},
@@ -485,6 +504,14 @@ class ScrapViewSet(viewsets.GenericViewSet):
             )
             logger.info(f"User {request.user.id} toggled on scrap for restaurant {restaurant_id} - logged interaction")
 
+            # 스크랩 기반 카테고리 선호도 업데이트
+            try:
+                category = request.data.get('category', '')
+                menu_name = request.data.get('menu_name', '')
+                update_category_preference_on_scrap(request.user, category=category, menu_name=menu_name)
+            except Exception as e:
+                logger.warning(f"Failed to update category preference: {e}")
+
             serializer = self.get_serializer(scrap)
             return Response(
                 {"scrapped": True, "data": serializer.data},
@@ -494,46 +521,46 @@ class ScrapViewSet(viewsets.GenericViewSet):
     def _is_aws_configured(self):
         """Check if AWS credentials are properly configured"""
         from django.conf import settings
-        
+
         aws_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
         aws_secret = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
-        
+
         # Check if credentials exist and are not placeholder values
-        return bool(aws_key and aws_secret and 
-                   aws_key != 'placeholder_key' and 
+        return bool(aws_key and aws_secret and
+                   aws_key != 'placeholder_key' and
                    aws_secret != 'placeholder_secret' and
                    aws_key.strip() and aws_secret.strip())
-    
+
     def _upload_to_local_storage(self, user_id, username, scraps_data):
         """Fallback: Store scraps in local file storage"""
         import json
         import os
         from django.conf import settings
-        
+
         # Create user scraps directory
         base_dir = getattr(settings, 'BASE_DIR', '/tmp')
         scraps_dir = os.path.join(base_dir, 'user_scraps', str(user_id))
         os.makedirs(scraps_dir, exist_ok=True)
-        
+
         # Write scraps to JSON file
         scraps_file = os.path.join(scraps_dir, 'scraps.json')
         scraps_json = json.dumps(scraps_data, indent=2, ensure_ascii=False)
-        
+
         with open(scraps_file, 'w', encoding='utf-8') as f:
             f.write(scraps_json)
-        
+
         print(f"✅ Successfully stored {len(scraps_data)} scraps locally: {scraps_file}")
         return scraps_file
-    
+
     def _download_from_local_storage(self, user_id):
         """Fallback: Load scraps from local file storage"""
         import json
         import os
         from django.conf import settings
-        
+
         base_dir = getattr(settings, 'BASE_DIR', '/tmp')
         scraps_file = os.path.join(base_dir, 'user_scraps', str(user_id), 'scraps.json')
-        
+
         if os.path.exists(scraps_file):
             with open(scraps_file, 'r', encoding='utf-8') as f:
                 scraps_data = json.load(f)
@@ -548,24 +575,24 @@ class ScrapViewSet(viewsets.GenericViewSet):
         """원격 저장소에 스크랩 데이터 업로드 (AWS S3 또는 로컬 저장소 폴백)"""
         import json
         from django.conf import settings
-        
+
         scraps_data = request.data.get('scraps', [])
-        
+
         if not request.user.is_authenticated:
             return Response(
                 {"error": "Authentication required"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
+
         print(f"📤 Remote Upload: Processing {len(scraps_data)} scraps for user {request.user.username} (ID: {request.user.id})")
-        
+
         # Check if AWS is properly configured
         if self._is_aws_configured():
             # Use real AWS S3
             try:
                 import boto3
                 from botocore.exceptions import ClientError, NoCredentialsError
-                
+
                 # Initialize S3 client
                 s3_client = boto3.client(
                     's3',
@@ -573,14 +600,14 @@ class ScrapViewSet(viewsets.GenericViewSet):
                     aws_secret_access_key=getattr(settings, 'AWS_SECRET_ACCESS_KEY'),
                     region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'us-east-1')
                 )
-                
+
                 # S3 bucket and file path
                 bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'swpp-foodigram-storage')
                 file_key = f"user-scraps/{request.user.id}/scraps.json"
-                
+
                 # Convert scraps data to JSON
                 scraps_json = json.dumps(scraps_data, indent=2, ensure_ascii=False)
-                
+
                 # Upload to S3
                 s3_client.put_object(
                     Bucket=bucket_name,
@@ -593,18 +620,18 @@ class ScrapViewSet(viewsets.GenericViewSet):
                         'upload_timestamp': str(timezone.now().isoformat())
                     }
                 )
-                
+
                 print(f"✅ Successfully uploaded {len(scraps_data)} scraps to S3: s3://{bucket_name}/{file_key}")
-                
+
                 return Response(
                     {"message": f"Successfully uploaded {len(scraps_data)} scraps to AWS S3"},
                     status=status.HTTP_200_OK
                 )
-                
+
             except Exception as e:
                 print(f"❌ AWS S3 upload failed: {e}")
                 print("🔄 Falling back to local storage...")
-                
+
                 # Fallback to local storage
                 try:
                     self._upload_to_local_storage(request.user.id, request.user.username, scraps_data)
@@ -639,17 +666,17 @@ class ScrapViewSet(viewsets.GenericViewSet):
         """갤러리 이미지 메타데이터를 원격 저장소에 업로드 (AWS S3 또는 로컬 저장소 폴백)"""
         import json
         from django.conf import settings
-        
+
         if not request.user.is_authenticated:
             return Response(
                 {"error": "Authentication required"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
+
         # Get current gallery images from database
         gallery_images = UserGalleryImage.objects.filter(user=request.user)
         gallery_data = []
-        
+
         for image in gallery_images:
             gallery_data.append({
                 "image_url": image.image_url,
@@ -664,16 +691,16 @@ class ScrapViewSet(viewsets.GenericViewSet):
                 "local_uri": image.local_uri,
                 "created_at": image.created_at.isoformat(),
             })
-        
+
         print(f"📤 Remote Gallery Upload: Processing {len(gallery_data)} gallery images for user {request.user.username} (ID: {request.user.id})")
-        
+
         # Check if AWS is properly configured
         if self._is_aws_configured():
             # Use real AWS S3
             try:
                 import boto3
                 from botocore.exceptions import ClientError, NoCredentialsError
-                
+
                 # Initialize S3 client
                 s3_client = boto3.client(
                     's3',
@@ -681,11 +708,11 @@ class ScrapViewSet(viewsets.GenericViewSet):
                     aws_secret_access_key=getattr(settings, 'AWS_SECRET_ACCESS_KEY'),
                     region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'us-east-1')
                 )
-                
+
                 # S3 bucket and file path
                 bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'swpp-foodigram-storage')
                 file_key = f"user-gallery/{request.user.id}/gallery.json"
-                
+
                 # Upload to S3
                 gallery_json = json.dumps(gallery_data, ensure_ascii=False, indent=2)
                 s3_client.put_object(
@@ -694,18 +721,18 @@ class ScrapViewSet(viewsets.GenericViewSet):
                     Body=gallery_json.encode('utf-8'),
                     ContentType='application/json'
                 )
-                
+
                 print(f"✅ Successfully uploaded {len(gallery_data)} gallery images to S3: s3://{bucket_name}/{file_key}")
-                
+
                 return Response(
                     {"message": f"Successfully uploaded {len(gallery_data)} gallery images to S3"},
                     status=status.HTTP_200_OK
                 )
-                
+
             except Exception as e:
                 print(f"❌ AWS S3 gallery upload failed: {e}")
                 print("🔄 Falling back to local storage...")
-                
+
                 # Fallback to local storage
                 try:
                     self._upload_gallery_to_local_storage(request.user.id, request.user.username, gallery_data)
@@ -740,22 +767,22 @@ class ScrapViewSet(viewsets.GenericViewSet):
         """원격 저장소에서 갤러리 이미지 메타데이터 다운로드 (AWS S3 또는 로컬 저장소 폴백)"""
         import json
         from django.conf import settings
-        
+
         if not request.user.is_authenticated:
             return Response(
                 {"error": "Authentication required"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
+
         print(f"📥 Remote Gallery Download: Fetching gallery images for user {request.user.username} (ID: {request.user.id})")
-        
+
         # Check if AWS is properly configured
         if self._is_aws_configured():
             # Use real AWS S3
             try:
                 import boto3
                 from botocore.exceptions import ClientError, NoCredentialsError
-                
+
                 # Initialize S3 client
                 s3_client = boto3.client(
                     's3',
@@ -763,21 +790,21 @@ class ScrapViewSet(viewsets.GenericViewSet):
                     aws_secret_access_key=getattr(settings, 'AWS_SECRET_ACCESS_KEY'),
                     region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'us-east-1')
                 )
-                
+
                 # S3 bucket and file path
                 bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'swpp-foodigram-storage')
                 file_key = f"user-gallery/{request.user.id}/gallery.json"
-                
+
                 # Download from S3
                 try:
                     response = s3_client.get_object(Bucket=bucket_name, Key=file_key)
                     gallery_json = response['Body'].read().decode('utf-8')
                     gallery_data = json.loads(gallery_json)
-                    
+
                     print(f"✅ Successfully downloaded {len(gallery_data)} gallery images from S3: s3://{bucket_name}/{file_key}")
-                    
+
                     return Response(gallery_data, status=status.HTTP_200_OK)
-                    
+
                 except ClientError as e:
                     error_code = e.response['Error']['Code']
                     if error_code == 'NoSuchKey':
@@ -785,11 +812,11 @@ class ScrapViewSet(viewsets.GenericViewSet):
                         return Response([], status=status.HTTP_200_OK)
                     else:
                         raise e
-                
+
             except Exception as e:
                 print(f"❌ AWS S3 gallery download failed: {e}")
                 print("🔄 Falling back to local storage...")
-                
+
                 # Fallback to local storage
                 try:
                     gallery_data = self._download_gallery_from_local_storage(request.user.id)
@@ -813,27 +840,27 @@ class ScrapViewSet(viewsets.GenericViewSet):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-    @action(detail=False, methods=['get'], url_path='download-from-aws')  
+    @action(detail=False, methods=['get'], url_path='download-from-aws')
     def download_from_aws(self, request):
         """원격 저장소에서 스크랩 데이터 다운로드 (AWS S3 또는 로컬 저장소 폴백)"""
         import json
         from django.conf import settings
-        
+
         if not request.user.is_authenticated:
             return Response(
                 {"error": "Authentication required"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
+
         print(f"📥 Remote Download: Fetching scraps for user {request.user.username} (ID: {request.user.id})")
-        
+
         # Check if AWS is properly configured
         if self._is_aws_configured():
             # Use real AWS S3
             try:
                 import boto3
                 from botocore.exceptions import ClientError, NoCredentialsError
-                
+
                 # Initialize S3 client
                 s3_client = boto3.client(
                     's3',
@@ -841,21 +868,21 @@ class ScrapViewSet(viewsets.GenericViewSet):
                     aws_secret_access_key=getattr(settings, 'AWS_SECRET_ACCESS_KEY'),
                     region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'us-east-1')
                 )
-                
+
                 # S3 bucket and file path
                 bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'swpp-foodigram-storage')
                 file_key = f"user-scraps/{request.user.id}/scraps.json"
-                
+
                 # Download from S3
                 try:
                     response = s3_client.get_object(Bucket=bucket_name, Key=file_key)
                     scraps_json = response['Body'].read().decode('utf-8')
                     scraps_data = json.loads(scraps_json)
-                    
+
                     print(f"✅ Successfully downloaded {len(scraps_data)} scraps from S3: s3://{bucket_name}/{file_key}")
-                    
+
                     return Response(scraps_data, status=status.HTTP_200_OK)
-                    
+
                 except ClientError as e:
                     error_code = e.response['Error']['Code']
                     if error_code == 'NoSuchKey':
@@ -863,11 +890,11 @@ class ScrapViewSet(viewsets.GenericViewSet):
                         return Response([], status=status.HTTP_200_OK)
                     else:
                         raise e
-                
+
             except Exception as e:
                 print(f"❌ AWS S3 download failed: {e}")
                 print("🔄 Falling back to local storage...")
-                
+
                 # Fallback to local storage
                 try:
                     scraps_data = self._download_from_local_storage(request.user.id)
@@ -896,19 +923,19 @@ class ScrapViewSet(viewsets.GenericViewSet):
         import json
         import os
         from django.conf import settings
-        
+
         # Create user gallery directory
         base_dir = getattr(settings, 'BASE_DIR', '/tmp')
         gallery_dir = os.path.join(base_dir, 'user_gallery', str(user_id))
         os.makedirs(gallery_dir, exist_ok=True)
-        
+
         # Write gallery data to JSON file
         gallery_file = os.path.join(gallery_dir, 'gallery.json')
         gallery_json = json.dumps(gallery_data, indent=2, ensure_ascii=False)
-        
+
         with open(gallery_file, 'w', encoding='utf-8') as f:
             f.write(gallery_json)
-        
+
         print(f"✅ Successfully stored {len(gallery_data)} gallery images locally: {gallery_file}")
 
     def _download_gallery_from_local_storage(self, user_id):
@@ -916,10 +943,10 @@ class ScrapViewSet(viewsets.GenericViewSet):
         import json
         import os
         from django.conf import settings
-        
+
         base_dir = getattr(settings, 'BASE_DIR', '/tmp')
         gallery_file = os.path.join(base_dir, 'user_gallery', str(user_id), 'gallery.json')
-        
+
         if os.path.exists(gallery_file):
             with open(gallery_file, 'r', encoding='utf-8') as f:
                 gallery_data = json.load(f)
@@ -934,11 +961,11 @@ class OnboardingViewSet(viewsets.GenericViewSet):
     """온보딩 취향 설정 API"""
     permission_classes = [IsAuthenticated]
     serializer_class = UserPreferenceSerializer
-    
+
     def get_queryset(self):
         """현재 유저의 취향 설정만 조회"""
         return UserPreference.objects.filter(user=self.request.user)
-    
+
     def list(self, request):
         """내 취향 설정 조회"""
         preference = UserPreference.objects.filter(user=request.user).first()
@@ -950,11 +977,11 @@ class OnboardingViewSet(viewsets.GenericViewSet):
                 {"message": "No preferences set yet"},
                 status=status.HTTP_404_NOT_FOUND
             )
-    
+
     def create(self, request):
         """취향 설정 생성/업데이트"""
         from django.db import transaction, IntegrityError
-        
+
         try:
             with transaction.atomic():
                 preference, created = UserPreference.objects.get_or_create(
@@ -976,7 +1003,7 @@ class OnboardingViewSet(viewsets.GenericViewSet):
             except UserPreference.DoesNotExist:
                 # If still doesn't exist, re-raise the error
                 raise
-        
+
         if not created:
             # 기존 설정 업데이트
             serializer = self.get_serializer(preference, data=request.data, partial=True)
@@ -986,12 +1013,12 @@ class OnboardingViewSet(viewsets.GenericViewSet):
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         else:
             serializer = self.get_serializer(preference)
-        
+
         return Response(
-            serializer.data, 
+            serializer.data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
         )
-    
+
     @action(detail=False, methods=['patch'], url_path='update')
     def update_preferences(self, request):
         """취향 설정 부분 업데이트"""
@@ -1187,3 +1214,112 @@ class RLWeightViewSet(viewsets.GenericViewSet):
 
         serializer = self.get_serializer(weight_entry)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class RemoteScrapViewSet(viewsets.GenericViewSet):
+    """원격 스크랩 동기화 API - 카테고리 정보 포함"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return UserRemoteScrap.objects.filter(user=self.request.user)
+
+    def list(self, request):
+        """원격 스크랩 목록 조회"""
+        scraps = self.get_queryset().order_by('-scrapped_at')
+        data = []
+        for scrap in scraps:
+            data.append({
+                'menu_id': scrap.menu_id,
+                'menu_name': scrap.menu_name,
+                'place_name': scrap.place_name,
+                'price': scrap.price,
+                'category': scrap.category,
+                'location': scrap.location,
+                'rating': scrap.rating,
+                'review_count': scrap.review_count,
+                'image_url': scrap.image_url,
+                'coordinates': scrap.coordinates,
+                'scrapped_at': scrap.scrapped_at.isoformat(),
+                'synced_at': scrap.synced_at.isoformat(),
+            })
+        return Response(data)
+
+    def create(self, request):
+        """원격 스크랩 생성/동기화"""
+        from django.utils.dateparse import parse_datetime
+
+        scraps_data = request.data.get('scraps', [])
+        if not isinstance(scraps_data, list):
+            scraps_data = [request.data]
+
+        created_count = 0
+        updated_count = 0
+
+        for scrap_data in scraps_data:
+            menu_id = scrap_data.get('menu_id')
+            if not menu_id:
+                continue
+
+            scrapped_at = scrap_data.get('scrapped_at')
+            if isinstance(scrapped_at, str):
+                scrapped_at = parse_datetime(scrapped_at) or timezone.now()
+            else:
+                scrapped_at = timezone.now()
+
+            defaults = {
+                'menu_name': scrap_data.get('menu_name', ''),
+                'place_name': scrap_data.get('place_name', ''),
+                'price': scrap_data.get('price'),
+                'category': scrap_data.get('category', ''),
+                'location': scrap_data.get('location', ''),
+                'rating': scrap_data.get('rating'),
+                'review_count': scrap_data.get('review_count'),
+                'image_url': scrap_data.get('image_url', ''),
+                'coordinates': scrap_data.get('coordinates', []),
+                'scrapped_at': scrapped_at,
+            }
+
+            _, created = UserRemoteScrap.objects.update_or_create(
+                user=request.user,
+                menu_id=menu_id,
+                defaults=defaults
+            )
+
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+        try:
+            service = ScrapCategoryPreferenceService(request.user)
+            updated_cuisines = service.update_user_favorite_cuisines()
+            logger.info(f"User {request.user.id} category preferences updated: {updated_cuisines}")
+        except Exception as e:
+            logger.warning(f"Failed to update category preferences after remote sync: {e}")
+
+        return Response({
+            'message': 'Scraps synced successfully',
+            'created': created_count,
+            'updated': updated_count,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='category-preferences')
+    def category_preferences(self, request):
+        """스크랩 기반 카테고리 선호도 조회"""
+        service = ScrapCategoryPreferenceService(request.user)
+        profile = service.get_category_preference_profile()
+        return Response(profile)
+
+    @action(detail=False, methods=['post'], url_path='refresh-preferences')
+    def refresh_preferences(self, request):
+        """스크랩 기반 카테고리 선호도 수동 갱신"""
+        service = ScrapCategoryPreferenceService(request.user)
+        updated_cuisines = service.update_user_favorite_cuisines()
+        profile = service.get_category_preference_profile()
+
+        return Response({
+            'message': 'Category preferences updated',
+            'updated_cuisines': updated_cuisines,
+            'profile': profile
+        })
