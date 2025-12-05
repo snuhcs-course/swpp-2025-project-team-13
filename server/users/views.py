@@ -504,6 +504,14 @@ class ScrapViewSet(viewsets.GenericViewSet):
             )
             logger.info(f"User {request.user.id} toggled on scrap for restaurant {restaurant_id} - logged interaction")
 
+            # 스크랩 기반 카테고리 선호도 업데이트
+            try:
+                category = request.data.get('category', '')
+                menu_name = request.data.get('menu_name', '')
+                update_category_preference_on_scrap(request.user, category=category, menu_name=menu_name)
+            except Exception as e:
+                logger.warning(f"Failed to update category preference: {e}")
+
             serializer = self.get_serializer(scrap)
             return Response(
                 {"scrapped": True, "data": serializer.data},
