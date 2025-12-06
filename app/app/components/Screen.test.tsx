@@ -143,5 +143,170 @@ describe("Screen", () => {
     expect(getByText("Second")).toBeTruthy()
     expect(getByText("Third")).toBeTruthy()
   })
+
+  it("renders with ScrollViewProps", () => {
+    const onScrollMock = jest.fn()
+    const { toJSON } = renderWithSafeArea(
+      <Screen preset="scroll" ScrollViewProps={{ onScroll: onScrollMock }}>
+        <Text>Content</Text>
+      </Screen>,
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("calls ScrollViewProps onLayout if provided", () => {
+    const onLayoutMock = jest.fn()
+    const { UNSAFE_getByType } = renderWithSafeArea(
+      <Screen preset="scroll" ScrollViewProps={{ onLayout: onLayoutMock }}>
+        <Text>Content</Text>
+      </Screen>,
+    )
+    
+    const ScrollView = require("react-native").ScrollView
+    const scrollView = UNSAFE_getByType(ScrollView)
+    
+    // Simulate layout event
+    if (scrollView.props.onLayout) {
+      scrollView.props.onLayout({
+        nativeEvent: { layout: { height: 500, width: 300, x: 0, y: 0 } },
+      })
+    }
+    
+    expect(onLayoutMock).toHaveBeenCalled()
+  })
+
+  it("calls ScrollViewProps onContentSizeChange if provided", () => {
+    const onContentSizeChangeMock = jest.fn()
+    const { UNSAFE_getByType } = renderWithSafeArea(
+      <Screen preset="scroll" ScrollViewProps={{ onContentSizeChange: onContentSizeChangeMock }}>
+        <Text>Content</Text>
+      </Screen>,
+    )
+    
+    const ScrollView = require("react-native").ScrollView
+    const scrollView = UNSAFE_getByType(ScrollView)
+    
+    // Simulate content size change
+    if (scrollView.props.onContentSizeChange) {
+      scrollView.props.onContentSizeChange(300, 600)
+    }
+    
+    expect(onContentSizeChangeMock).toHaveBeenCalledWith(300, 600)
+  })
+
+  it("handles auto preset with point threshold", () => {
+    const { toJSON } = renderWithSafeArea(
+      <Screen preset="auto" scrollEnabledToggleThreshold={{ point: 100 }}>
+        <Text>Auto Content</Text>
+      </Screen>,
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("handles auto preset with percent threshold", () => {
+    const { toJSON } = renderWithSafeArea(
+      <Screen preset="auto" scrollEnabledToggleThreshold={{ percent: 0.8 }}>
+        <Text>Auto Content</Text>
+      </Screen>,
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("disables scroll when content fits screen in auto preset", () => {
+    const { UNSAFE_getByType } = renderWithSafeArea(
+      <Screen preset="auto">
+        <Text>Small Content</Text>
+      </Screen>,
+    )
+    
+    const ScrollView = require("react-native").ScrollView
+    const scrollView = UNSAFE_getByType(ScrollView)
+    
+    // Simulate layout with large screen
+    if (scrollView.props.onLayout) {
+      scrollView.props.onLayout({
+        nativeEvent: { layout: { height: 800, width: 300, x: 0, y: 0 } },
+      })
+    }
+    
+    // Simulate small content
+    if (scrollView.props.onContentSizeChange) {
+      scrollView.props.onContentSizeChange(300, 200)
+    }
+    
+    // Scroll should be disabled since content fits
+    expect(scrollView.props.scrollEnabled).toBe(false)
+  })
+
+  it("enables scroll when content exceeds screen in auto preset", () => {
+    const { UNSAFE_getByType } = renderWithSafeArea(
+      <Screen preset="auto">
+        <Text>Large Content</Text>
+      </Screen>,
+    )
+    
+    const ScrollView = require("react-native").ScrollView
+    const scrollView = UNSAFE_getByType(ScrollView)
+    
+    // Simulate layout with small screen
+    if (scrollView.props.onLayout) {
+      scrollView.props.onLayout({
+        nativeEvent: { layout: { height: 400, width: 300, x: 0, y: 0 } },
+      })
+    }
+    
+    // Simulate large content
+    if (scrollView.props.onContentSizeChange) {
+      scrollView.props.onContentSizeChange(300, 1000)
+    }
+    
+    // Scroll should be enabled since content exceeds screen
+    expect(scrollView.props.scrollEnabled).toBe(true)
+  })
+
+  it("renders with StatusBarProps", () => {
+    const { toJSON } = renderWithSafeArea(
+      <Screen StatusBarProps={{ hidden: false }}>
+        <Text>Content</Text>
+      </Screen>,
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("renders with KeyboardAvoidingViewProps", () => {
+    const { toJSON } = renderWithSafeArea(
+      <Screen KeyboardAvoidingViewProps={{ enabled: true }}>
+        <Text>Content</Text>
+      </Screen>,
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("handles scroll preset with keyboardShouldPersistTaps never", () => {
+    const { toJSON } = renderWithSafeArea(
+      <Screen preset="scroll" keyboardShouldPersistTaps="never">
+        <Text>Content</Text>
+      </Screen>,
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("applies ScrollViewProps style", () => {
+    const { toJSON } = renderWithSafeArea(
+      <Screen preset="scroll" ScrollViewProps={{ style: { paddingTop: 10 } }}>
+        <Text>Content</Text>
+      </Screen>,
+    )
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("applies ScrollViewProps contentContainerStyle", () => {
+    const { toJSON } = renderWithSafeArea(
+      <Screen preset="scroll" ScrollViewProps={{ contentContainerStyle: { paddingBottom: 20 } }}>
+        <Text>Content</Text>
+      </Screen>,
+    )
+    expect(toJSON()).toBeTruthy()
+  })
 })
 

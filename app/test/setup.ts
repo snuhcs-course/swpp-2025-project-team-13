@@ -41,9 +41,13 @@ jest.mock("expo-localization", () => ({
 }))
 
 jest.mock("expo-media-library", () => ({
-  usePermissions: jest.fn(),
-  getAlbumsAsync: jest.fn(),
-  getAssetsAsync: jest.fn(),
+  usePermissions: jest.fn().mockReturnValue([
+    { status: 'granted', granted: true },
+    jest.fn().mockResolvedValue({ status: 'granted', granted: true })
+  ]),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
+  getAlbumsAsync: jest.fn().mockResolvedValue([]),
+  getAssetsAsync: jest.fn().mockResolvedValue({ assets: [], hasNextPage: false }),
 }))
 
 jest.mock("@infinitered/react-native-mlkit-image-labeling", () => ({
@@ -86,6 +90,35 @@ jest.mock("lucide-react-native", () => ({
   Check: "Check",
   Plus: "Plus",
   Minus: "Minus",
+  AlertCircle: "AlertCircle",
+  CheckCircle: "CheckCircle",
+  AlertTriangle: "AlertTriangle",
+  Eye: "Eye",
+  EyeOff: "EyeOff",
+  Key: "Key",
+  Copy: "Copy",
+  Mail: "Mail",
+  Lock: "Lock",
+  Shield: "Shield",
+  Egg: "Egg",
+  Leaf: "Leaf",
+  Flower2: "Flower2",
+  Fish: "Fish",
+  UtensilsCrossed: "UtensilsCrossed",
+  Wheat: "Wheat",
+  Droplets: "Droplets",
+  Circle: "Circle",
+  RotateCcw: "RotateCcw",
+  Images: "Images",
+  Pizza: "Pizza",
+  Coffee: "Coffee",
+  ChefHat: "ChefHat",
+  Flame: "Flame",
+  Wine: "Wine",
+  Sprout: "Sprout",
+  Shell: "Shell",
+  Milk: "Milk",
+  Nut: "Nut",
 }))
 
 jest.mock("../app/i18n/i18n.ts", () => ({

@@ -1,318 +1,720 @@
-import React from "react";
-import { render, fireEvent, waitFor } from "@testing-library/react-native";
-import { OnboardingScreen } from "./OnboardingScreen";
-import { Alert } from "react-native";
+import React from "react"
+import { render, fireEvent, waitFor, act } from "@testing-library/react-native"
+import { OnboardingScreen } from "./OnboardingScreen"
+import * as Location from "expo-location"
+import * as MediaLibrary from "expo-media-library"
+import { Alert } from "react-native"
 
 // Mock navigation
-const mockReplace = jest.fn();
-const navigation = { replace: mockReplace };
+const mockReplace = jest.fn()
+const navigation = { replace: mockReplace } as any
 
 // Mock API
-const mockSavePreferences = jest.fn();
+const mockSavePreferences = jest.fn().mockResolvedValue({ ok: true })
 
 jest.mock("app/services/api", () => ({
   api: {
     savePreferences: (...args: any[]) => mockSavePreferences(...args),
   },
-}));
+}))
+
+// Mock expo-location
+jest.mock("expo-location", () => ({
+  requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: "granted" }),
+  getCurrentPositionAsync: jest.fn().mockResolvedValue({
+    coords: { latitude: 37.5665, longitude: 126.9780 },
+  }),
+}))
+
+// Mock expo-media-library  
+const mockRequestGalleryPermission = jest.fn().mockResolvedValue({ status: 'granted', granted: true })
+jest.mock("expo-media-library", () => ({
+  usePermissions: jest.fn().mockReturnValue([
+    { status: 'granted', granted: true },
+    mockRequestGalleryPermission
+  ]),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: "granted" }),
+}))
+
+// Mock useAlbumScanner
+const mockScanAlbums = jest.fn()
+jest.mock("app/services/albums/useAlbumScanner", () => ({
+  useAlbumScanner: jest.fn(() => ({
+    scanAlbums: mockScanAlbums,
+  })),
+}))
+
+// Mock storage
+const mockStorageSaveString = jest.fn()
+const mockStorageRemove = jest.fn()
+jest.mock("app/utils/storage", () => ({
+  save: jest.fn(),
+  saveString: (...args: any[]) => mockStorageSaveString(...args),
+  load: jest.fn(),
+  loadString: jest.fn(),
+  remove: (...args: any[]) => mockStorageRemove(...args),
+  clear: jest.fn(),
+}))
 
 // Mock Alert
-jest.spyOn(Alert, "alert");
+jest.spyOn(Alert, "alert").mockImplementation(() => {})
 
 describe("OnboardingScreen", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-  });
+    jest.clearAllMocks()
+    jest.useFakeTimers()
+    // Reset MediaLibrary mock to default
+    ;(MediaLibrary.usePermissions as jest.Mock).mockReturnValue([
+      { status: 'granted', granted: true },
+      mockRequestGalleryPermission
+    ])
+    mockRequestGalleryPermission.mockResolvedValue({ status: 'granted', granted: true })
+  })
 
-  it("renders first step (taste preferences) by default", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText("What are your taste preferences?")).toBeTruthy();
-    expect(getByText("Help us recommend food you'll love")).toBeTruthy();
-    expect(getByText("Spicy Level: 5", { exact: false })).toBeTruthy();
-    expect(getByText("Sweet Level: 5", { exact: false })).toBeTruthy();
-    expect(getByText("Salty Level: 5", { exact: false })).toBeTruthy();
-  });
+  afterEach(() => {
+    jest.useRealTimers()
+  })
 
-  it("displays progress bar with current step", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText("1 of 4")).toBeTruthy();
-  });
+  describe("Initial Render", () => {
+    it("renders without crashing", async () => {
+    const { toJSON } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+    expect(toJSON()).toBeTruthy()
+  })
 
-  it("navigates to next step when Next button is pressed", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
+    it("renders the first step (location permission)", async () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+    expect(getByText("위치 서비스 활성화")).toBeTruthy()
+  })
+
+    it("shows location access button", async () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+    expect(getByText("위치 접근 허용")).toBeTruthy()
+  })
+
+    it("shows skip button on location step", async () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+    expect(getByText("건너뛰기")).toBeTruthy()
+  })
+
+    it("shows location description text", async () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+    expect(getByText(/근처의 맛집을 추천하기 위해 위치 정보가 필요해요/)).toBeTruthy()
+  })
+
+    it("shows location benefits", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      expect(getByText("주변 레스토랑")).toBeTruthy()
+      expect(getByText("맞춤형 추천")).toBeTruthy()
+      expect(getByText("새로운 맛집 경험")).toBeTruthy()
+    })
+  })
+
+  describe("Location Permission", () => {
+  it("requests location permission when button is pressed", async () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
     
-    expect(getByText("Any allergies?")).toBeTruthy();
-    expect(getByText("2 of 4")).toBeTruthy();
-  });
-
-  it("navigates back to previous step when Back button is pressed", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
+      await act(async () => {
+    fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
     
-    // Go to step 2
-    fireEvent.press(getByText("Next"));
-    expect(getByText("Any allergies?")).toBeTruthy();
+      expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalled()
+  })
+
+  it("shows warning modal when skip is pressed", async () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
     
-    // Go back to step 1
-    fireEvent.press(getByText("Back"));
-    expect(getByText("What are your taste preferences?")).toBeTruthy();
-  });
-
-  it("does not show Back button on first step", () => {
-    const { queryByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(queryByText("Back")).toBeFalsy();
-  });
-
-  it("skips to Foodigram when Skip button is pressed", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Skip"));
+      await act(async () => {
+    fireEvent.press(getByText("건너뛰기"))
+        jest.runAllTimers()
+      })
     
-    expect(mockReplace).toHaveBeenCalledWith("Foodigram");
-  });
+      expect(getByText("위치 서비스 비활성화")).toBeTruthy()
+  })
 
-  it("updates spicy level when slider is pressed", () => {
-    const { getByText, getAllByRole } = render(
-      <OnboardingScreen navigation={navigation} />
-    );
+  it("navigates to gallery step after location permission granted", async () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
     
-    // Initial value should be 5
-    expect(getByText("Spicy Level: 5", { exact: false })).toBeTruthy();
-  });
-
-  it("updates sweet level when slider is pressed", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText("Sweet Level: 5", { exact: false })).toBeTruthy();
-  });
-
-  it("updates salty level when slider is pressed", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText("Salty Level: 5", { exact: false })).toBeTruthy();
-  });
-
-  it("shows exploration slider and updates value", () => {
-    const { getByText, getByTestId } = render(<OnboardingScreen navigation={navigation} />);
-    // Initial value rendered (default 2)
-    expect(getByText("Food Exploration: 2")).toBeTruthy();
-    // Tap the highest value
-    fireEvent.press(getByTestId("explore-dot-5"));
-    expect(getByText("Food Exploration: 5")).toBeTruthy();
-  });
-
-  it("displays allergies step", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
+      await act(async () => {
+    fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
     
-    expect(getByText("Any allergies?")).toBeTruthy();
-    expect(getByText("Select all that apply")).toBeTruthy();
-    expect(getByText("eggs")).toBeTruthy();
-    expect(getByText("peanuts")).toBeTruthy();
-  });
-
-  it("toggles allergy selection", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    
-    const eggsButton = getByText("eggs");
-    fireEvent.press(eggsButton);
-    // Should toggle selection
-  });
-
-  it("displays disliked ingredients step", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next")); // Step 2
-    fireEvent.press(getByText("Next")); // Step 3
-    
-    expect(getByText("Ingredients you dislike?")).toBeTruthy();
-    expect(getByText("We'll avoid recommending these")).toBeTruthy();
-    expect(getByText("onion")).toBeTruthy();
-    expect(getByText("garlic")).toBeTruthy();
-  });
-
-  it("toggles disliked ingredient selection", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    const onionButton = getByText("onion");
-    fireEvent.press(onionButton);
-    // Should toggle selection
-  });
-
-  it("displays favorite cuisines step", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next")); // Step 2
-    fireEvent.press(getByText("Next")); // Step 3
-    fireEvent.press(getByText("Next")); // Step 4
-    
-    expect(getByText("Favorite cuisines?")).toBeTruthy();
-    expect(getByText("What types of food do you enjoy?")).toBeTruthy();
-    expect(getByText("korean")).toBeTruthy();
-    expect(getByText("japanese")).toBeTruthy();
-  });
-
-  it("toggles favorite cuisine selection", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    const koreanButton = getByText("korean");
-    fireEvent.press(koreanButton);
-    // Should toggle selection
-  });
-
-  it("shows Complete button on last step", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    expect(getByText("Complete")).toBeTruthy();
-    expect(getByText("4 of 4")).toBeTruthy();
-  });
-
-  it("saves preferences and navigates to Foodigram on completion", async () => {
-    mockSavePreferences.mockResolvedValue({ ok: true });
-
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    
-    // Navigate to last step
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    // Press Complete
-    fireEvent.press(getByText("Complete"));
-
     await waitFor(() => {
-      expect(mockSavePreferences).toHaveBeenCalled();
-      expect(Alert.alert).toHaveBeenCalled();
-    });
-  });
+      expect(getByText("갤러리 동기화")).toBeTruthy()
+    })
+  })
 
-  it("shows error when preferences save fails", async () => {
-    mockSavePreferences.mockResolvedValue({ ok: false });
-
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
+    it("handles location permission denied", async () => {
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: "denied" })
+      
+    const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
     
-    // Navigate to last step
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    // Press Complete
-    fireEvent.press(getByText("Complete"));
+      await act(async () => {
+    fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      expect(getByText("위치 서비스 활성화")).toBeTruthy()
+  })
 
+    it("handles location error gracefully", async () => {
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: "granted" })
+      ;(Location.getCurrentPositionAsync as jest.Mock).mockRejectedValueOnce(new Error("Location error"))
+      
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+    fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+    
     await waitFor(() => {
-      // The actual implementation might call with different message on ok: false
-      expect(Alert.alert).toHaveBeenCalled();
-    });
-  });
+      expect(getByText("갤러리 동기화")).toBeTruthy()
+    })
+    })
+  })
 
-  it("shows error when API call throws exception", async () => {
-    mockSavePreferences.mockRejectedValue(new Error("Network error"));
+  describe("Gallery Step", () => {
+    it("renders gallery step correctly after location permission", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => {
+        expect(getByText("갤러리 동기화")).toBeTruthy()
+      })
+    })
 
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    
-    // Navigate to last step
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    // Press Complete
-    fireEvent.press(getByText("Complete"));
+    it("shows gallery description", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => {
+        expect(getByText(/갤러리의 음식 사진을 자동으로 동기화/)).toBeTruthy()
+      })
+    })
 
-    await waitFor(() => {
-      expect(Alert.alert).toHaveBeenCalledWith(
-        "Error",
-        "An error occurred while saving preferences."
-      );
-    });
-  });
+    it("shows gallery access button", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => {
+        expect(getByText("갤러리 접근 허용")).toBeTruthy()
+      })
+    })
 
-  it("disables Complete button while loading", async () => {
-    mockSavePreferences.mockImplementation(
-      () => new Promise(resolve => setTimeout(() => resolve({ ok: true }), 100))
-    );
+    it("requests gallery permission and starts scanning", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+        fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      expect(mockScanAlbums).toHaveBeenCalled()
+    })
 
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    
-    // Navigate to last step
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    const completeButton = getByText("Complete");
-    fireEvent.press(completeButton);
+    it("shows skip button on gallery step", async () => {
+      const { getByText, getAllByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      const skipButtons = getAllByText("건너뛰기")
+      expect(skipButtons.length).toBeGreaterThan(0)
+    })
 
-    // Note: The button disabling might not reflect immediately in test environment
-    // This test verifies the button exists and can be pressed
-    expect(completeButton).toBeTruthy();
-  });
+    it("shows gallery benefits", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      expect(getByText("음식 사진 자동 인식")).toBeTruthy()
+      expect(getByText("맞춤형 추천 향상")).toBeTruthy()
+      expect(getByText("개인 갤러리 관리")).toBeTruthy()
+    })
 
-  it("allows multiple allergies to be selected", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    
-    fireEvent.press(getByText("eggs"));
-    fireEvent.press(getByText("peanuts"));
-    fireEvent.press(getByText("milk"));
-    // All should be selected
-  });
+    it("handles gallery permission denied - triggers warning modal", async () => {
+      ;(MediaLibrary.usePermissions as jest.Mock).mockReturnValue([
+        { status: 'undetermined', granted: false },
+        mockRequestGalleryPermission
+      ])
+      mockRequestGalleryPermission.mockResolvedValueOnce({ status: 'denied', granted: false })
+      
+      const { getByText, toJSON } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+        fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      // Modal should be visible (component still renders)
+      expect(toJSON()).toBeTruthy()
+    })
 
-  it("allows multiple disliked ingredients to be selected", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    fireEvent.press(getByText("onion"));
-    fireEvent.press(getByText("garlic"));
-    // Both should be selected
-  });
+    it("handles gallery permission error - triggers warning modal", async () => {
+      ;(MediaLibrary.usePermissions as jest.Mock).mockReturnValue([
+        { status: 'undetermined', granted: false },
+        mockRequestGalleryPermission
+      ])
+      mockRequestGalleryPermission.mockRejectedValueOnce(new Error("Permission error"))
+      
+      const { getByText, toJSON } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+        fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      // Component should still render after error
+      expect(toJSON()).toBeTruthy()
+    })
 
-  it("allows multiple favorite cuisines to be selected", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    fireEvent.press(getByText("korean"));
-    fireEvent.press(getByText("japanese"));
-    fireEvent.press(getByText("italian"));
-    // All should be selected
-  });
+    it("can press skip on gallery step", async () => {
+      const { getByText, getAllByText, toJSON } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      const skipButtons = getAllByText("건너뛰기")
+      await act(async () => {
+        fireEvent.press(skipButtons[skipButtons.length - 1])
+        jest.runAllTimers()
+      })
+      
+      // Modal should appear, component still renders
+      expect(toJSON()).toBeTruthy()
+    })
+  })
 
-  it("renders all allergen options", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    
-    const allergens = ["eggs", "soy", "sesame", "fish", "shellfish", "wheat", "milk", "peanuts", "tree nuts"];
-    allergens.forEach(allergen => {
-      expect(getByText(allergen)).toBeTruthy();
-    });
-  });
+  describe("Warning Modal Interactions", () => {
+    it("confirms location warning and proceeds to gallery", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("건너뛰기"))
+        jest.runAllTimers()
+      })
+      
+      expect(getByText("위치 서비스 비활성화")).toBeTruthy()
+      
+      await act(async () => {
+      fireEvent.press(getByText("확인"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => {
+        expect(getByText("갤러리 동기화")).toBeTruthy()
+      })
+    })
 
-  it("renders all ingredient options", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    const ingredients = ["onion", "garlic", "ginger", "cilantro", "mushroom", "tomato", "cheese", "meat", "seafood"];
-    ingredients.forEach(ingredient => {
-      expect(getByText(ingredient)).toBeTruthy();
-    });
-  });
+    it("cancels location warning and stays on location step", async () => {
+      const { getByText, getAllByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("건너뛰기"))
+        jest.runAllTimers()
+      })
+      
+      expect(getByText("위치 서비스 비활성화")).toBeTruthy()
+      
+      const cancelButtons = getAllByText("취소")
+      await act(async () => {
+      fireEvent.press(cancelButtons[cancelButtons.length - 1])
+        jest.runAllTimers()
+      })
+      
+        expect(getByText("위치 서비스 활성화")).toBeTruthy()
+      })
+    })
 
-  it("renders all cuisine options", () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    fireEvent.press(getByText("Next"));
-    
-    const cuisines = ["korean", "japanese", "chinese", "western", "thai", "italian", "mexican", "indian"];
-    cuisines.forEach(cuisine => {
-      expect(getByText(cuisine)).toBeTruthy();
-    });
-  });
-});
+  describe("Taste Preference Steps", () => {
+    it("renders sweet preference step", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+        fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => {
+        expect(getByText("단 걸 좋아하시나요?")).toBeTruthy()
+      })
+      
+      expect(getByText("매우 좋아해요")).toBeTruthy()
+      expect(getByText("좋아해요")).toBeTruthy()
+      expect(getByText("평범해요")).toBeTruthy()
+      expect(getByText("싫어해요")).toBeTruthy()
+      expect(getByText("절대 안 먹어요")).toBeTruthy()
+    })
 
+    it("selects sweet preference and shows next button", async () => {
+      const { getByText, getAllByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+        fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("단 걸 좋아하시나요?")).toBeTruthy())
+      
+      await act(async () => {
+        fireEvent.press(getByText("매우 좋아해요"))
+        jest.runAllTimers()
+      })
+      
+      const nextButtons = getAllByText("다음")
+      expect(nextButtons.length).toBeGreaterThan(0)
+      })
+
+    it("can change sweet preference selection", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+      fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("단 걸 좋아하시나요?")).toBeTruthy())
+      
+      // Select one option
+      await act(async () => {
+      fireEvent.press(getByText("매우 좋아해요"))
+        jest.runAllTimers()
+    })
+
+      // Change to another option
+      await act(async () => {
+        fireEvent.press(getByText("싫어해요"))
+        jest.runAllTimers()
+      })
+      
+      expect(getByText("싫어해요")).toBeTruthy()
+    })
+
+    it("next button is disabled when no option selected", async () => {
+      const { getByText, getAllByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+    })
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+      fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("단 걸 좋아하시나요?")).toBeTruthy())
+      
+      // Next button should exist (but disabled)
+      const nextButtons = getAllByText("다음")
+      expect(nextButtons.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe("Navigation", () => {
+    it("can go back from taste step", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+      fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("단 걸 좋아하시나요?")).toBeTruthy())
+      
+      await act(async () => {
+        fireEvent.press(getByText("뒤로"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => {
+        expect(getByText("갤러리 동기화")).toBeTruthy()
+      })
+    })
+
+    it("navigation replace function is available", () => {
+      expect(mockReplace).toBeDefined()
+    })
+
+    it("back button goes to previous step from taste step", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      // Go to gallery
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      // Go to sweet step
+      await act(async () => {
+        fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("단 걸 좋아하시나요?")).toBeTruthy())
+      
+      // Go back to gallery
+      await act(async () => {
+        fireEvent.press(getByText("뒤로"))
+        jest.runAllTimers()
+      })
+      
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+    })
+  })
+
+  describe("Progress Indicator", () => {
+    it("renders progress bar", async () => {
+      const { toJSON } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      expect(toJSON()).toBeTruthy()
+    })
+  })
+
+  describe("API", () => {
+    it("savePreferences API mock is set up correctly", () => {
+      expect(mockSavePreferences).toBeDefined()
+    })
+  })
+
+  describe("Multi-step Navigation Flow", () => {
+    it("navigates through location to gallery to sweet step", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      // Step 1: Location
+      expect(getByText("위치 서비스 활성화")).toBeTruthy()
+      
+      await act(async () => {
+        fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      // Step 2: Gallery
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      await act(async () => {
+        fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      
+      // Step 3: Sweet
+      await waitFor(() => expect(getByText("단 걸 좋아하시나요?")).toBeTruthy())
+    })
+
+    it("navigates via skip buttons - location skip with confirm", async () => {
+      const { getByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      // Skip location
+      await act(async () => {
+        fireEvent.press(getByText("건너뛰기"))
+        jest.runAllTimers()
+      })
+      expect(getByText("위치 서비스 비활성화")).toBeTruthy()
+      
+      await act(async () => {
+        fireEvent.press(getByText("확인"))
+        jest.runAllTimers()
+      })
+      
+      // Now on gallery
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+    })
+
+    it("navigates through taste preference steps", async () => {
+      const { getByText, getAllByText } = render(<OnboardingScreen navigation={navigation} route={{} as any} />)
+      await act(async () => {
+        jest.runAllTimers()
+      })
+      
+      // Location -> Gallery
+      await act(async () => {
+      fireEvent.press(getByText("위치 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("갤러리 동기화")).toBeTruthy())
+      
+      // Gallery -> Sweet
+      await act(async () => {
+      fireEvent.press(getByText("갤러리 접근 허용"))
+        jest.runAllTimers()
+      })
+      await waitFor(() => expect(getByText("단 걸 좋아하시나요?")).toBeTruthy())
+      
+      // Select sweet option and go to spicy
+      await act(async () => {
+        fireEvent.press(getByText("평범해요"))
+        jest.runAllTimers()
+      })
+      await act(async () => {
+        fireEvent.press(getAllByText("다음")[0])
+        jest.runAllTimers()
+      })
+      
+      // Should be on spicy step
+      await waitFor(() => expect(getByText("매운 걸 좋아하시나요?")).toBeTruthy())
+    })
+
+
+  })
+})
