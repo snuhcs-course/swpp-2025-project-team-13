@@ -425,33 +425,32 @@ describe("ProfileScreen", () => {
     });
 
     it("handles successful account deletion", async () => {
-      (api.deleteAccount as any) = jest.fn().mockResolvedValue({ ok: true });
       (userAuthFacade.deleteUserAccount as any) = jest.fn().mockResolvedValue({ success: true });
       
-      // Account deletion would be handled through modal flow
-      const response = await (api as any).deleteAccount("password123");
-      expect(response.ok).toBe(true);
+      const result = await userAuthFacade.deleteUserAccount();
+      expect(result.success).toBe(true);
     });
 
-    it("handles account deletion with wrong password", async () => {
-      (api.deleteAccount as any) = jest.fn().mockResolvedValue({ 
-        ok: false, 
-        data: { detail: "Invalid password" } 
+    it("handles account deletion failure", async () => {
+      (userAuthFacade.deleteUserAccount as any) = jest.fn().mockResolvedValue({ 
+        success: false,
+        errorMessage: "계정 삭제에 실패했습니다."
       });
       
-      const response = await (api as any).deleteAccount("wrongpassword");
-      expect(response.ok).toBe(false);
+      const result = await userAuthFacade.deleteUserAccount();
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toBeTruthy();
     });
 
     it("handles Cognito deletion failure", async () => {
-      (api.deleteAccount as any) = jest.fn().mockResolvedValue({ ok: true });
-      (userAuthFacade.deleteUserAccount as any) = jest.fn().mockResolvedValue({ success: false });
+      (userAuthFacade.deleteUserAccount as any) = jest.fn().mockResolvedValue({ 
+        success: false,
+        errorMessage: "AWS 계정 삭제에 실패했습니다."
+      });
       
-      const response = await (api as any).deleteAccount("password123");
-      expect(response.ok).toBe(true);
-      
-      const cognitoResult = await (userAuthFacade as any).deleteUserAccount();
-      expect(cognitoResult.success).toBe(false);
+      const result = await userAuthFacade.deleteUserAccount();
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toContain("AWS");
     });
   });
 
@@ -703,7 +702,7 @@ describe("ProfileScreen", () => {
     const storage = require("app/utils/storage");
 
     it("initiates album scan when gallery permission is granted", async () => {
-      storage.loadString.mockImplementation((key) => {
+      storage.loadString.mockImplementation((key: string) => {
         if (key === "GALLERY_PERMISSION_GRANTED") return Promise.resolve('true');
         if (key === "USE_DUMMY_STORAGE") return Promise.resolve('false');
         if (key === "LOCATION_PERMISSION_GRANTED") return Promise.resolve('false');
@@ -731,7 +730,7 @@ describe("ProfileScreen", () => {
     });
 
     it("shows permission modal when gallery access is disabled", async () => {
-      storage.loadString.mockImplementation((key) => {
+      storage.loadString.mockImplementation((key: string) => {
         if (key === "GALLERY_PERMISSION_GRANTED") return Promise.resolve('false');
         if (key === "USE_DUMMY_STORAGE") return Promise.resolve('true');
         if (key === "LOCATION_PERMISSION_GRANTED") return Promise.resolve('false');
@@ -780,13 +779,15 @@ describe("ProfileScreen", () => {
       // Testing modal flow requires modal components to be tested separately
     });
 
-    it("handles successful Django deletion but Cognito failure", async () => {
-      (api.deleteAccount as jest.Mock).mockResolvedValue({ ok: true });
-      (userAuthFacade.deleteUserAccount as any).mockResolvedValue({ success: false });
+    it("handles Cognito failure after successful backend deletion", async () => {
+      (userAuthFacade.deleteUserAccount as any) = jest.fn().mockResolvedValue({ 
+        success: false,
+        errorMessage: "AWS 계정 삭제에 실패했습니다."
+      });
       
-      // This tests the API layer
-      const response = await api.deleteAccount("password123");
-      expect(response.ok).toBe(true);
+      const result = await userAuthFacade.deleteUserAccount();
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toContain("AWS");
     });
   });
 
@@ -816,8 +817,7 @@ describe("ProfileScreen", () => {
       });
       
       // The listener should be called with 'focus'
-      const focusListener = mockAddListener.mock.calls[0][0];
-      expect(focusListener).toBe('focus');
+      expect(mockAddListener).toHaveBeenCalledWith('focus', expect.any(Function));
     });
   });
 
@@ -920,7 +920,7 @@ describe("ProfileScreen", () => {
   describe("Loading Animation States", () => {
     it("shows loading overlay when album scanning", async () => {
       const storage = require("app/utils/storage");
-      storage.loadString.mockImplementation((key) => {
+      storage.loadString.mockImplementation((key: string) => {
         if (key === "GALLERY_PERMISSION_GRANTED") return Promise.resolve('true');
         if (key === "USE_DUMMY_STORAGE") return Promise.resolve('false');
         return Promise.resolve('false');
@@ -952,7 +952,7 @@ describe("ProfileScreen", () => {
       const storage = require("app/utils/storage");
       const Location = require("expo-location");
       
-      storage.loadString.mockImplementation((key) => {
+      storage.loadString.mockImplementation((key: string) => {
         if (key === "LOCATION_PERMISSION_GRANTED") return Promise.resolve('true');
         if (key === "USE_DUMMY_LOCATION") return Promise.resolve('false');
         return Promise.resolve('false');
@@ -982,7 +982,7 @@ describe("ProfileScreen", () => {
       const storage = require("app/utils/storage");
       const Location = require("expo-location");
       
-      storage.loadString.mockImplementation((key) => {
+      storage.loadString.mockImplementation((key: string) => {
         if (key === "LOCATION_PERMISSION_GRANTED") return Promise.resolve('true');
         if (key === "USE_DUMMY_LOCATION") return Promise.resolve('false');
         return Promise.resolve('false');
@@ -1001,7 +1001,7 @@ describe("ProfileScreen", () => {
   describe("Album Scan Completion Modal", () => {
     it("shows completion modal with found image count", async () => {
       const storage = require("app/utils/storage");
-      storage.loadString.mockImplementation((key) => {
+      storage.loadString.mockImplementation((key: string) => {
         if (key === "GALLERY_PERMISSION_GRANTED") return Promise.resolve('true');
         if (key === "USE_DUMMY_STORAGE") return Promise.resolve('false');
         return Promise.resolve('false');
