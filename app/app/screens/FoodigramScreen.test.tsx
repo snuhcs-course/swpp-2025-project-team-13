@@ -164,44 +164,44 @@ describe("FoodigramScreen", () => {
     });
 
     it("renders bottom navigation tabs", async () => {
-      const { getByTestId } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
+      const { getByText } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
       await act(async () => {
         jest.runAllTimers();
       });
-      expect(getByTestId("FoodigramTab")).toBeTruthy();
-      expect(getByTestId("ScrapTab")).toBeTruthy();
-      expect(getByTestId("ProfileTab")).toBeTruthy();
+      expect(getByText("추천")).toBeTruthy();
+      expect(getByText("스크랩")).toBeTruthy();
+      expect(getByText("마이페이지")).toBeTruthy();
     });
   });
 
   describe("Navigation", () => {
     it("navigates to Scrap screen when ScrapTab is pressed", async () => {
-      const { getByTestId } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
+      const { getByText } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
       await act(async () => {
         jest.runAllTimers();
       });
       
-      fireEvent.press(getByTestId("ScrapTab"));
+      fireEvent.press(getByText("스크랩"));
       expect(mockNavigate).toHaveBeenCalledWith("Scrap");
     });
 
     it("navigates to Profile screen when ProfileTab is pressed", async () => {
-      const { getByTestId } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
+      const { getByText } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
       await act(async () => {
         jest.runAllTimers();
       });
       
-      fireEvent.press(getByTestId("ProfileTab"));
+      fireEvent.press(getByText("마이페이지"));
       expect(mockNavigate).toHaveBeenCalledWith("Profile");
     });
 
     it("navigates to Foodigram when FoodigramTab is pressed", async () => {
-      const { getByTestId } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
+      const { getByText } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
       await act(async () => {
         jest.runAllTimers();
       });
       
-      fireEvent.press(getByTestId("FoodigramTab"));
+      fireEvent.press(getByText("추천"));
       expect(mockNavigate).toHaveBeenCalledWith("Foodigram");
     });
 
@@ -818,14 +818,14 @@ describe("FoodigramScreen", () => {
 
   describe("Bottom Tabs", () => {
     it("renders all three bottom tabs", async () => {
-      const { getByTestId } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
+      const { getByText } = render(<FoodigramScreen navigation={navigation} route={defaultRoute} />);
       await act(async () => {
         jest.runAllTimers();
       });
       
-      expect(getByTestId("FoodigramTab")).toBeTruthy();
-      expect(getByTestId("ScrapTab")).toBeTruthy();
-      expect(getByTestId("ProfileTab")).toBeTruthy();
+      expect(getByText("추천")).toBeTruthy();
+      expect(getByText("스크랩")).toBeTruthy();
+      expect(getByText("마이페이지")).toBeTruthy();
     });
   });
 

@@ -40,7 +40,8 @@ describe("SignUpSuccessModal", () => {
       <SignUpSuccessModal {...defaultProps} onClose={onClose} />
     )
     const touchables = UNSAFE_getAllByType(require("react-native").TouchableOpacity)
-    fireEvent.press(touchables[0])
+    // touchables[0] is overlay, touchables[1] is container, touchables[2] is close button
+    fireEvent.press(touchables[2])
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
