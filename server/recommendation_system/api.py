@@ -503,20 +503,77 @@ def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_servi
         유사도 점수 (0.0 ~ 1.0)
     """
     try:
+        from users.scrap_category_service import extract_category_from_menu_name
+        
         score = 0.0
         weight_sum = 0.0
         
-        # 1. 카테고리 매칭 (가중치: 0.4)
+        # 1. 카테고리 매칭 (가중치: 0.25)
         preferred_categories = onboarding_data.get('preferred_categories', [])
         if preferred_categories:
             menu_category = menu.get('category', '')
             # category_normalized 사용
             menu_category_normalized = menu.get('category_normalized', menu_category)
             if menu_category_normalized in preferred_categories:
-                score += 0.4
-            weight_sum += 0.4
+                score += 0.25
+            weight_sum += 0.25
+
+        # 2. 스크랩 기반 카테고리 선호도 (가중치: 0.10)
+        scrap_category_prefs = onboarding_data.get('scrap_category_preferences', {})
+        if scrap_category_prefs:
+            category_scores = scrap_category_prefs.get('category_preferences', {})
+            menu_category = menu.get('category', '')
+            menu_category_normalized = menu.get('category_normalized', menu_category)
+
+            if menu_category_normalized in category_scores:
+                scrap_score = category_scores[menu_category_normalized]
+                score += 0.10 * scrap_score
+            elif menu.get('name'):
+                inferred_category = extract_category_from_menu_name(menu['name'])
+                if inferred_category in category_scores:
+                    scrap_score = category_scores[inferred_category]
+                    score += 0.10 * scrap_score * 0.7
+
+            weight_sum += 0.10
+
+        # 3. 갤러리 이미지 기반 카테고리 선호도 (가중치: 0.15) - NEW
+        # 갤러리 이미지는 실제 식습관을 직접 반영하므로 스크랩보다 높은 가중치
+        gallery_category_prefs = onboarding_data.get('gallery_category_preferences', {})
+        if gallery_category_prefs:
+            gallery_scores = gallery_category_prefs.get('category_preferences', {})
+            menu_category = menu.get('category', '')
+            menu_category_normalized = menu.get('category_normalized', menu_category)
+
+            if menu_category_normalized in gallery_scores:
+                gallery_score = gallery_scores[menu_category_normalized]
+                score += 0.15 * gallery_score
+            elif menu.get('name'):
+                inferred_category = extract_category_from_menu_name(menu['name'])
+                if inferred_category in gallery_scores:
+                    gallery_score = gallery_scores[inferred_category]
+                    score += 0.15 * gallery_score * 0.7
+
+            weight_sum += 0.15
+
+        # 4. 통합 카테고리 선호도 (가중치: 0.10) - NEW
+        # 스크랩 + 갤러리 통합 점수 (보조적 역할)
+        combined_category_prefs = onboarding_data.get('combined_category_preferences', {})
+        if combined_category_prefs:
+            menu_category = menu.get('category', '')
+            menu_category_normalized = menu.get('category_normalized', menu_category)
+
+            if menu_category_normalized in combined_category_prefs:
+                combined_score = combined_category_prefs[menu_category_normalized]
+                score += 0.10 * combined_score
+            elif menu.get('name'):
+                inferred_category = extract_category_from_menu_name(menu['name'])
+                if inferred_category in combined_category_prefs:
+                    combined_score = combined_category_prefs[inferred_category]
+                    score += 0.10 * combined_score * 0.7
+
+            weight_sum += 0.10
         
-        # 2. 키워드 매칭 (가중치: 0.3)
+        # 5. 키워드 매칭 (가중치: 0.20)
         menu_keywords = menu.get('keywords', [])
         if menu_keywords and isinstance(menu_keywords, list):
             # 사용자 선호 키워드와 비교
@@ -531,25 +588,25 @@ def calculate_menu_similarity(menu: Dict, onboarding_data: Dict, embedding_servi
                 overlap = len(menu_keywords_set.intersection(liked_keywords))
                 if len(menu_keywords_set) > 0:
                     keyword_score = overlap / len(menu_keywords_set)
-                    score += 0.3 * keyword_score
-            weight_sum += 0.3
+                    score += 0.20 * keyword_score
+            weight_sum += 0.20
         
-        # 3. 가격 적합도 (가중치: 0.2)
+        # 6. 가격 적합도 (가중치: 0.15)
         budget_range = onboarding_data.get('budget_range', [0, 0])
         menu_price = menu.get('price', 0)
         if budget_range[0] > 0 or budget_range[1] > 0:
             if budget_range[0] <= menu_price <= budget_range[1]:
-                score += 0.2
+                score += 0.15
             elif menu_price < budget_range[0]:
                 # 예산보다 저렴하면 부분 점수
-                score += 0.1
-            weight_sum += 0.2
+                score += 0.075
+            weight_sum += 0.15
         
-        # 4. 임베딩 유사도 (옵션, 가중치: 0.1)
+        # 7. 임베딩 유사도 (옵션, 가중치: 0.05)
         if embedding_service and menu.get('embedding_vector'):
             # 사용자 프로필 텍스트와 메뉴 임베딩 비교
             # 향후 구현 가능
-            weight_sum += 0.1
+            weight_sum += 0.05
         
         # 정규화
         if weight_sum > 0:
@@ -846,6 +903,37 @@ def _recommend_menu_internal(request, phase=None):
                 'budget_range': data.get('budget_range', [0, 0]),  # API 파라미터에서 가져오거나 기본값
                 'distance_preference': data.get('distance_preference', 2.0)  # API 파라미터에서 가져오거나 기본값
             }
+            
+            # 갤러리 이미지 기반 카테고리 선호도 추가 (NEW)
+            try:
+                from users.gallery_category_service import GalleryCategoryPreferenceService
+                gallery_service = GalleryCategoryPreferenceService(user)
+                gallery_profile = gallery_service.get_gallery_category_preference_profile()
+                onboarding_data['gallery_category_preferences'] = gallery_profile
+                logger.info(f"User {user.id} gallery preferences: {gallery_profile.get('category_preferences', {})}")
+            except Exception as e:
+                logger.warning(f"Failed to get gallery preferences: {e}")
+                onboarding_data['gallery_category_preferences'] = {}
+            
+            # 스크랩 기반 카테고리 선호도 추가 (NEW)
+            try:
+                from users.scrap_category_service import ScrapCategoryPreferenceService
+                scrap_service = ScrapCategoryPreferenceService(user)
+                scrap_profile = scrap_service.get_category_preference_profile()
+                onboarding_data['scrap_category_preferences'] = scrap_profile
+                logger.info(f"User {user.id} scrap preferences: {scrap_profile.get('category_preferences', {})}")
+            except Exception as e:
+                logger.warning(f"Failed to get scrap preferences: {e}")
+                onboarding_data['scrap_category_preferences'] = {}
+            
+            # 통합 카테고리 선호도 추가 (NEW)
+            try:
+                from users.gallery_category_service import get_combined_category_preferences
+                combined_prefs = get_combined_category_preferences(user)
+                onboarding_data['combined_category_preferences'] = combined_prefs
+            except Exception as e:
+                logger.warning(f"Failed to get combined preferences: {e}")
+                onboarding_data['combined_category_preferences'] = {}
         except UserPreference.DoesNotExist:
             # 온보딩 정보가 없는 경우 기본값 사용
             onboarding_data = {
@@ -896,6 +984,26 @@ def _recommend_menu_internal(request, phase=None):
         context_info = process_query_context(query_text, onboarding_data, request.user)
         enhanced_onboarding_data = context_info.get('enhanced_preferences', onboarding_data)
 
+        # 검색에 사용할 카테고리 병합: 온보딩 선택 + 갤러리 기반 + 스크랩 기반
+        search_categories = set(enhanced_onboarding_data.get('preferred_categories', []))
+        
+        # 갤러리 기반 상위 카테고리 추가 (실제 식습관 반영)
+        gallery_prefs = enhanced_onboarding_data.get('gallery_category_preferences', {})
+        if gallery_prefs:
+            gallery_top = gallery_prefs.get('top_categories', [])
+            search_categories.update(gallery_top)
+            logger.info(f"Added gallery categories to search: {gallery_top}")
+        
+        # 스크랩 기반 상위 카테고리 추가
+        scrap_prefs = enhanced_onboarding_data.get('scrap_category_preferences', {})
+        if scrap_prefs:
+            scrap_top = scrap_prefs.get('top_categories', [])
+            search_categories.update(scrap_top)
+            logger.info(f"Added scrap categories to search: {scrap_top}")
+        
+        merged_categories = list(search_categories)
+        logger.info(f"Final search categories: {merged_categories}")
+
         # 검색 컨텍스트 생성 (쿼리 컨텍스트로 강화된 선호도 사용)
         search_context = SearchContext(
             user_location=tuple(data['user_location']),
@@ -903,7 +1011,7 @@ def _recommend_menu_internal(request, phase=None):
             max_distance=enhanced_onboarding_data.get('distance_preference', 2.0),
             allergies=enhanced_onboarding_data.get('allergies', []),
             dislikes=enhanced_onboarding_data.get('dislikes', []),
-            preferred_categories=enhanced_onboarding_data.get('preferred_categories', []),
+            preferred_categories=merged_categories,  # 병합된 카테고리 사용
             time_of_day=data.get('time_of_day', '점심'),
             day_of_week=data.get('day_of_week', '평일')
         )
