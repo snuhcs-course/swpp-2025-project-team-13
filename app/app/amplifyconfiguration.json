@@ -1,0 +1,26 @@
+{
+  "aws_project_region": "ap-northeast-2",
+  "aws_cognito_identity_pool_id": "ap-northeast-2:6f831b59-ad2f-4c43-a98f-f1bd1a561b39",
+  "aws_cognito_region": "ap-northeast-2",
+  "aws_user_pools_id": "ap-northeast-2_Wjc8wQpzj",
+  "aws_user_pools_web_client_id": "5f9lc8s3du50c3s47jpvhn33n0",
+  "oauth": {},
+  "aws_cognito_username_attributes": [],
+  "aws_cognito_social_providers": [],
+  "aws_cognito_signup_attributes": [
+    "EMAIL"
+  ],
+  "aws_cognito_mfa_configuration": "OFF",
+  "aws_cognito_mfa_types": [
+    "SMS"
+  ],
+  "aws_cognito_password_protection_settings": {
+    "passwordPolicyMinLength": 8,
+    "passwordPolicyCharacters": []
+  },
+  "aws_cognito_verification_mechanisms": [
+    "EMAIL"
+  ],
+  "aws_user_files_s3_bucket": "amplifyfoodigram7d2f8a01598b4fe0b37b6e2d0b2a99ed0ccb-dev",
+  "aws_user_files_s3_bucket_region": "ap-northeast-2"
+}
