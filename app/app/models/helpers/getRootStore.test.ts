@@ -45,7 +45,7 @@ describe("getRootStore", () => {
   it("should work with food item in food history store", () => {
     const rootStore = RootStoreModel.create()
     const testItem = {
-      id: 1,
+      id: "1",
       name: "Pizza",
       distance: "1.2 km",
       image: "pizza.jpg",

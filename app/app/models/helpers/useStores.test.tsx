@@ -40,7 +40,7 @@ describe("useStores", () => {
       foodHistoryStore: {
         scrappedItems: [
           {
-            id: 999,
+            id: "999",
             name: "Custom Item",
             distance: "0.1 km",
             image: "custom.jpg",

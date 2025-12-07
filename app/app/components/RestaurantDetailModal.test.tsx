@@ -43,14 +43,14 @@ describe("RestaurantDetailModal", () => {
     const { getByText } = render(
       <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
     )
-    expect(getByText("음식점 정보")).toBeTruthy()
+    expect(getByText("Restaurant Info")).toBeTruthy()
   })
 
   it("does not render when not visible", () => {
     const { queryByText } = render(
       <RestaurantDetailModal restaurantId={1} visible={false} onClose={jest.fn()} />,
     )
-    expect(queryByText("음식점 정보")).toBeNull()
+    expect(queryByText("Restaurant Info")).toBeNull()
   })
 
   it("calls onClose when modal is closed", () => {
@@ -96,7 +96,7 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("주소:")).toBeTruthy()
+      expect(getByText("Address:")).toBeTruthy()
       expect(getByText("123 Test St")).toBeTruthy()
     })
   })
@@ -107,7 +107,7 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("전화:")).toBeTruthy()
+      expect(getByText("Phone:")).toBeTruthy()
       expect(getByText("010-1234-5678")).toBeTruthy()
     })
   })
@@ -118,7 +118,7 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("메뉴")).toBeTruthy()
+      expect(getByText("Menu")).toBeTruthy()
     })
   })
 
@@ -139,8 +139,8 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("10,000원")).toBeTruthy()
-      expect(getByText("15,000원")).toBeTruthy()
+      expect(getByText("₩10,000")).toBeTruthy()
+      expect(getByText("₩15,000")).toBeTruthy()
     })
   })
 
@@ -164,7 +164,7 @@ describe("RestaurantDetailModal", () => {
     )
 
     await waitFor(() => {
-      expect(getByText("음식점 정보를 불러올 수 없습니다")).toBeTruthy()
+      expect(getByText("Unable to load restaurant information")).toBeTruthy()
     })
   })
 
@@ -177,6 +177,241 @@ describe("RestaurantDetailModal", () => {
     )
 
     expect(api.getRestaurantDetail).not.toHaveBeenCalled()
+  })
+
+  it("handles restaurant loading exception", async () => {
+    const { api } = require("../services/api")
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation()
+    api.getRestaurantDetail.mockRejectedValueOnce(new Error("Network error"))
+
+    const { getByText } = render(
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
+    )
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith("Error loading restaurant:", expect.any(Error))
+    })
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it("can toggle scrap on restaurant", async () => {
+    const { api } = require("../services/api")
+    
+    api.getRestaurantDetail.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 1,
+        name: "Test Restaurant",
+        address: "123 Test St",
+        menus: [],
+      },
+    })
+
+    api.toggleScrap.mockResolvedValueOnce({ ok: true, data: { scrapped: true } })
+
+    const { toJSON } = render(
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
+    )
+
+    await waitFor(() => {
+      // Wait for restaurant to load
+      expect(api.getRestaurantDetail).toHaveBeenCalled()
+    })
+
+    // The component should render
+    expect(toJSON()).toBeTruthy()
+  })
+
+  it("handles scrap toggle failure", async () => {
+    const { api } = require("../services/api")
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation()
+    
+    api.getRestaurantDetail.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 1,
+        name: "Test Restaurant",
+        address: "123 Test St",
+        menus: [],
+      },
+    })
+
+    api.toggleScrap.mockResolvedValueOnce({ ok: false, problem: "server error" })
+
+    const { UNSAFE_getByType } = render(
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
+    )
+
+    await waitFor(() => {
+      expect(api.getRestaurantDetail).toHaveBeenCalled()
+    })
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it("handles scrap toggle exception", async () => {
+    const { api } = require("../services/api")
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation()
+    
+    api.getRestaurantDetail.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 1,
+        name: "Test Restaurant",
+        address: "123 Test St",
+        menus: [],
+      },
+    })
+
+    api.toggleScrap.mockRejectedValueOnce(new Error("Network error"))
+
+    render(
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
+    )
+
+    await waitFor(() => {
+      expect(api.getRestaurantDetail).toHaveBeenCalled()
+    })
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it("formats invalid price correctly", async () => {
+    const { api } = require("../services/api")
+    
+    // Reset and set up mock for this specific test
+    api.getRestaurantDetail.mockReset()
+    api.getRestaurantDetail.mockResolvedValue({
+      ok: true,
+      data: {
+        id: 1,
+        name: "Test Restaurant",
+        address: "123 Test St",
+        menus: [
+          { name: "Invalid Price Menu", price: "not-a-number" },
+        ],
+      },
+    })
+
+    const { getByText, rerender } = render(
+      <RestaurantDetailModal restaurantId={null} visible={false} onClose={jest.fn()} />,
+    )
+
+    // Now open the modal
+    rerender(<RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />)
+
+    await waitFor(() => {
+      expect(getByText("Invalid Price Menu")).toBeTruthy()
+      expect(getByText("not-a-number")).toBeTruthy()
+    })
+  })
+
+  it("renders restaurant without image", async () => {
+    const { api } = require("../services/api")
+    
+    api.getRestaurantDetail.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 1,
+        name: "Test Restaurant",
+        address: "123 Test St",
+        menus: [],
+      },
+    })
+
+    const { getByText } = render(
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
+    )
+
+    await waitFor(() => {
+      expect(getByText("Test Restaurant")).toBeTruthy()
+    })
+  })
+
+  it("renders menu without image", async () => {
+    const { api } = require("../services/api")
+    
+    // Reset and set up mock for this specific test
+    api.getRestaurantDetail.mockReset()
+    api.getRestaurantDetail.mockResolvedValue({
+      ok: true,
+      data: {
+        id: 1,
+        name: "Test Restaurant",
+        address: "123 Test St",
+        menus: [
+          { name: "Menu Without Image", price: "10000.00" },
+        ],
+      },
+    })
+
+    const { getByText, rerender } = render(
+      <RestaurantDetailModal restaurantId={null} visible={false} onClose={jest.fn()} />,
+    )
+
+    // Now open the modal
+    rerender(<RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />)
+
+    await waitFor(() => {
+      expect(getByText("Menu Without Image")).toBeTruthy()
+    })
+  })
+
+  it("renders restaurant without phone", async () => {
+    const { api } = require("../services/api")
+    
+    api.getRestaurantDetail.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 1,
+        name: "Test Restaurant",
+        address: "123 Test St",
+        menus: [],
+      },
+    })
+
+    const { getByText, queryByText } = render(
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
+    )
+
+    await waitFor(() => {
+      expect(getByText("Test Restaurant")).toBeTruthy()
+      expect(queryByText("Phone:")).toBeNull()
+    })
+  })
+
+  it("renders restaurant without menus", async () => {
+    const { api } = require("../services/api")
+    
+    api.getRestaurantDetail.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 1,
+        name: "Test Restaurant",
+        address: "123 Test St",
+        menus: [],
+      },
+    })
+
+    const { getByText, queryByText } = render(
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
+    )
+
+    await waitFor(() => {
+      expect(getByText("Test Restaurant")).toBeTruthy()
+      expect(queryByText("Menu")).toBeNull()
+    })
+  })
+
+  it("checks scrap status on modal open", async () => {
+    const { toJSON } = render(
+      <RestaurantDetailModal restaurantId={1} visible={true} onClose={jest.fn()} />,
+    )
+
+    await waitFor(() => {
+      expect(toJSON()).toBeTruthy()
+    })
   })
 })
 

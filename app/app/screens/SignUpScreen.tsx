@@ -159,6 +159,7 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
               {fullNameError ? <Text style={$errorText}>{fullNameError}</Text> : null}
             </View>
             <TextInput
+              testID="signup-username-input"
               style={[
                 $input, 
                 fullNameError ? $inputError : null
@@ -180,6 +181,7 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
               {emailError ? <Text style={$errorText}>{emailError}</Text> : null}
             </View>
             <TextInput
+              testID="signup-email-input"
               style={[
                 $input,
                 emailError ? $inputError : null
@@ -206,6 +208,7 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
               passwordError ? $passwordContainerError : null
             ]}>
               <TextInput
+                testID="signup-password-input"
                 style={$passwordInput}
                 placeholder="비밀번호를 입력해 주세요"
                 placeholderTextColor="#9c5749"
@@ -239,6 +242,7 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
               confirmPasswordError ? $passwordContainerError : null
             ]}>
               <TextInput
+                testID="signup-confirm-password-input"
                 style={$passwordInput}
                 placeholder="비밀번호를 한 번 더 입력해 주세요"
                 placeholderTextColor="#9c5749"
@@ -264,6 +268,7 @@ export const SignUpScreen = observer(function SignUpScreen({ navigation }: SignU
           {/* Sign Up Button */}
           <View style={$buttonWrapper}>
             <TouchableOpacity 
+              testID="signup-submit-button"
               style={[$signUpButton, (isLoading || !isFormValid()) && $signUpButtonDisabled]}
               onPress={tryRegister}
               disabled={isLoading || !isFormValid()}
@@ -441,4 +446,3 @@ const $passwordContainerError: ViewStyle = {
   borderWidth: 1,
   borderColor: "#f66c51",
 }
-

@@ -45,7 +45,7 @@ describe("FoodHistoryStoreModel", () => {
 
       store.addScrappedItem(item)
 
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
       expect(store.scrappedItems[0].id).toBe("1")
       expect(store.scrappedItems[0].name).toBe("Pizza")
     })
@@ -64,7 +64,7 @@ describe("FoodHistoryStoreModel", () => {
       store.addScrappedItem(item)
       store.addScrappedItem(item) // Try to add same item again
 
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
     })
 
     it("should allow items with different IDs", () => {
@@ -91,7 +91,7 @@ describe("FoodHistoryStoreModel", () => {
       store.addScrappedItem(item1)
       store.addScrappedItem(item2)
 
-      expect(store.scrappedItems.length).toBe("2")
+      expect(store.scrappedItems.length).toBe(2)
     })
   })
 
@@ -110,7 +110,7 @@ describe("FoodHistoryStoreModel", () => {
     })
 
     it("should remove an existing item", () => {
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
       
       store.removeScrappedItem("1")
       
@@ -118,11 +118,11 @@ describe("FoodHistoryStoreModel", () => {
     })
 
     it("should not affect store when removing non-existent item", () => {
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
       
       store.removeScrappedItem("999") // Non-existent ID
       
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
     })
   })
 
@@ -142,13 +142,13 @@ describe("FoodHistoryStoreModel", () => {
       
       store.toggleScrappedItem(testItem)
       
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
       expect(store.scrappedItems[0].id).toBe("1")
     })
 
     it("should remove item when present", () => {
       store.addScrappedItem(testItem)
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
       
       store.toggleScrappedItem(testItem)
       
@@ -158,7 +158,7 @@ describe("FoodHistoryStoreModel", () => {
     it("should add item back after removing", () => {
       // Add item
       store.toggleScrappedItem(testItem)
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
       
       // Remove item
       store.toggleScrappedItem(testItem)
@@ -166,7 +166,7 @@ describe("FoodHistoryStoreModel", () => {
       
       // Add item again
       store.toggleScrappedItem(testItem)
-      expect(store.scrappedItems.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
       expect(store.scrappedItems[0].id).toBe("1")
     })
   })
@@ -212,7 +212,7 @@ describe("FoodHistoryStoreModel", () => {
       store.addScrappedItem(item3)
 
       const list = store.scrappedItemsList
-      expect(list.length).toBe("3")
+      expect(list.length).toBe(3)
       expect(list[0].id).toBe("3") // Most recent first
       expect(list[1].id).toBe("2")
       expect(list[2].id).toBe("1")
@@ -236,8 +236,8 @@ describe("FoodHistoryStoreModel", () => {
       list.push({} as any)
       
       // Original store should be unchanged
-      expect(store.scrappedItems.length).toBe("1")
-      expect(store.scrappedItemsList.length).toBe("1")
+      expect(store.scrappedItems.length).toBe(1)
+      expect(store.scrappedItemsList.length).toBe(1)
     })
   })
 
@@ -296,7 +296,7 @@ describe("FoodHistoryStoreModel", () => {
         scrappedItems: initialItems
       })
 
-      expect(newStore.scrappedItems.length).toBe("1")
+      expect(newStore.scrappedItems.length).toBe(1)
       expect(newStore.scrappedItems[0].name).toBe("Pizza")
     })
   })

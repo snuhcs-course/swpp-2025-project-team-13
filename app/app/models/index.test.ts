@@ -59,7 +59,7 @@ describe("models index", () => {
     
     // Test basic functionality through index exports
     rootStore.foodHistoryStore.addScrappedItem({
-      id: 1,
+      id: "1",
       name: "Test Item",
       distance: "1.0 km",
       image: "test.jpg",
@@ -68,7 +68,7 @@ describe("models index", () => {
       allergens: []
     })
     
-    expect(rootStore.foodHistoryStore.isScrapped(1)).toBe(true)
+    expect(rootStore.foodHistoryStore.isScrapped("1")).toBe(true)
     expect(rootStore.foodHistoryStore.scrappedItemsList.length).toBe(1)
   })
 

@@ -37,3 +37,43 @@ test("clear", async () => {
   await clear()
   expect(AsyncStorage.clear).toHaveBeenCalledWith()
 })
+
+test("loadString returns null on error", async () => {
+  (AsyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error("Storage error"))
+  const value = await loadString("something")
+  expect(value).toBeNull()
+})
+
+test("saveString returns false on error", async () => {
+  (AsyncStorage.setItem as jest.Mock).mockRejectedValueOnce(new Error("Storage error"))
+  const result = await saveString("something", "value")
+  expect(result).toBe(false)
+})
+
+test("load returns null on error", async () => {
+  (AsyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error("Storage error"))
+  const value = await load("something")
+  expect(value).toBeNull()
+})
+
+test("load returns null on invalid JSON", async () => {
+  (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce("invalid json{")
+  const value = await load("something")
+  expect(value).toBeNull()
+})
+
+test("save returns false on error", async () => {
+  (AsyncStorage.setItem as jest.Mock).mockRejectedValueOnce(new Error("Storage error"))
+  const result = await save("something", VALUE_OBJECT)
+  expect(result).toBe(false)
+})
+
+test("remove handles errors gracefully", async () => {
+  (AsyncStorage.removeItem as jest.Mock).mockRejectedValueOnce(new Error("Storage error"))
+  await expect(remove("something")).resolves.toBeUndefined()
+})
+
+test("clear handles errors gracefully", async () => {
+  (AsyncStorage.clear as jest.Mock).mockRejectedValueOnce(new Error("Storage error"))
+  await expect(clear()).resolves.toBeUndefined()
+})

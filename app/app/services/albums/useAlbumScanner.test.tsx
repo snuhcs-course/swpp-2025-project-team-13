@@ -11,9 +11,19 @@ jest.mock('@infinitered/react-native-mlkit-image-labeling', () => ({
 jest.mock('aws-amplify/storage', () => ({
     uploadData: jest.fn(),
 }));
+jest.mock('aws-amplify/auth', () => ({
+    getCurrentUser: jest.fn().mockResolvedValue({ username: 'testuser', userId: '123' }),
+    signUp: jest.fn(),
+    signIn: jest.fn(),
+    signOut: jest.fn(),
+    deleteUser: jest.fn(),
+    confirmSignUp: jest.fn(),
+}));
 jest.mock('../api', () => ({
     api: {
-        uploadPhoto: jest.fn()
+        uploadPhoto: jest.fn(),
+        getUserPhotos: jest.fn().mockResolvedValue([]),
+        createPhotoMetadata: jest.fn().mockResolvedValue({ ok: true, data: {} }),
     }
 }));
 
@@ -26,7 +36,7 @@ describe("useAlbumScanner", () => {
 
     beforeEach(() => {
         jest.resetModules();
-        global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn() });
+        global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['test'])) });
         MediaLibrary = require("expo-media-library");
         useAlbumScanner = require("./useAlbumScanner").useAlbumScanner;
         useImageLabeling = require("@infinitered/react-native-mlkit-image-labeling").useImageLabeling;

@@ -251,7 +251,7 @@ export const FoodigramScreen: React.FC<FoodigramScreenProps> = observer(function
       if (append) {
         // For append mode, add new menus to existing list
         const existingIds = new Set(recommendedMenus.map(m => m.id))
-        const uniqueNewMenus = newMenus.filter(menu => !existingIds.has(menu.id))
+        const uniqueNewMenus = newMenus.filter((menu: MenuRecommendationItem) => !existingIds.has(menu.id))
         
         if (uniqueNewMenus.length === 0) {
           setHasMoreData(false)
