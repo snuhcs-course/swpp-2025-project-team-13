@@ -12,6 +12,9 @@ omit =
     */.venv/*
     */env/*
     */node_modules/*
+    */chroma_init.py
+    */chroma_index.py
+    */unified_embeddings.py
 
 [report]
 exclude_lines =
