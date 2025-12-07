@@ -97,6 +97,9 @@ REST_FRAMEWORK = {
     ],
 }
 
+# Static files
+STATIC_URL = '/static/'
+
 # Mock AWS credentials
 AWS_ACCESS_KEY_ID = 'test'
 AWS_SECRET_ACCESS_KEY = 'test'
